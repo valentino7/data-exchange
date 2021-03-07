@@ -22,6 +22,8 @@
 #define EXPORT_SYMTAB
 #define REMOVE 1
 #define AWAKE_ALL 2
+#define MAX_MSG_SIZE 4096
+
 
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -56,6 +58,7 @@ MODULE_AUTHOR("Francesco Quaglia <framcesco.quaglia@uniroma2.it>");
 MODULE_DESCRIPTION("USCTM");
 
 #define MODNAME "DATA-EXCHANGE"
+static DEFINE_MUTEX(log_get_mutex);
 
 unsigned long *hacked_ni_syscall=NULL;
 unsigned long **hacked_syscall_tbl=NULL;
@@ -191,7 +194,7 @@ unsigned long new_sys_call_array[] = {(unsigned long)sys_tag_get,(unsigned long)
 
 typedef struct _tag_level{
     int awake  ;
-    unsigned long num_thread __attribute__((aligned(8)));
+//    unsigned long num_thread __attribute__((aligned(8)));
     wait_queue_head_t my_queue;
 } level;
 
@@ -211,23 +214,23 @@ elem tail = {NULL,-1,-1,NULL,NULL};
 spinlock_t queue_lock;
 
 void awake_all(elem* p, int tag){
-
+    int i;
     for (i = 0; i < 32; i++){
-        p->level[level].awake=0;
-        wake_up(&p->level[level].my_queue);
+        p->level[i].awake=0;
+        wake_up(&p->level[i].my_queue);
     }
 }
 
 int remove_tag(elem* p, int tag){
-
+    int i;
     for (i = 0; i < 32; i++){
-        if ( p->level[level].num_thread!=0)
+        if ( waitqueue_active(&p->level[i].my_queue))
             return -1;
     }
     //lockare
     p->prev->next=p->next;
     p->next->prev=p->prev;
-    free(p);
+    kfree(p);
 
     return 1;
 }
@@ -242,20 +245,22 @@ int check_and_get_if_key_exists(int key) {
 }
 
 void add_elem(int key) {
+    elem *aux;
+    int i;
+
     elem* new = kmalloc(sizeof (struct _tag_elem), GFP_KERNEL);
     new->level= (level*)kmalloc(32*sizeof (struct _tag_level), GFP_KERNEL);
-    elem *aux;
 
     new->key = key;
     new->tag = key;
     //inizializzo le 32 wait qeue
     printk("%s: prima aver inizializzato awake:\n",MODNAME);
 
-    int i;
+
     for (i = 0; i < 32; i++){
         new->level[i].awake = 1;
         init_waitqueue_head(&new->level[i].my_queue);
-        new->level[i].num_thread=0;
+//        new->level[i].num_thread=0;
     }
     printk("%s: dpo aver inizializzato awake: %d \n",MODNAME, new->level[3].awake = 1);
 
@@ -298,6 +303,22 @@ void print_list_tag(int tag){
     }
 }
 
+void free_list(void)
+{
+    elem *n = head.next;
+    head.next=NULL;
+    while(n!=NULL ){
+        n->prev=NULL;
+        elem *n1 = n;
+        n = n->next;
+        //se sono arrivato alla tail è statica e quindi non faccio la free
+        if (n !=NULL)
+            kfree(n1);
+    }
+    printk("%s:LIBERO MEMORIA\n", MODNAME);
+}
+
+
 #define SYS_CALL_INSTALL
 
 #ifdef SYS_CALL_INSTALL
@@ -328,18 +349,45 @@ static unsigned long sys_tag_get = (unsigned long) __x64_sys_tag_get;
 #endif
 
 
-
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
 __SYSCALL_DEFINEx(4, _tag_send, int, tag, int, level, char*, buffer, size_t, size){
 #else
 asmlinkage int sys_tag_send(int tag, int level, char* buffer, size_t size){
 #endif
-        printk("%s: send-params sys-call has been called %d %d %s %zu  \n",MODNAME,tag,level,buffer,size);
-        elem* p = get_tag_byTagAndLevel(tag);
-        p->level[level].awake=0;
-        wake_up(&p->level[level].my_queue);
+    elem* p;
+    char  kernel_buff[MAX_MSG_SIZE];
+    unsigned long ret;
+    void* addr;
+    printk("%s: send-params sys-call has been called %d %d %s %zu  \n",MODNAME,tag,level,buffer,size);
+//    p= check_and_get_tag_if_exists(tag);
+//    p->level[level].awake=0;
 
-        while (test_and_set(p->level[level].num_thread)!=0);
+    if(size >= (MAX_MSG_SIZE -1)) goto bad_size;//leave 1 byte for string terminator
+
+    addr = (void*)get_zeroed_page(GFP_KERNEL);
+
+    if (addr == NULL) return -1;
+
+    ret = copy_from_user((char*)addr,(char*)buffer,size);//returns the number of bytes NOT copied
+
+    mutex_lock(&log_get_mutex);
+    memcpy((char*)kernel_buff,(char*)addr,size-ret);
+    kernel_buff[size - ret] = '\0';
+
+
+    printk("%s: kernel buffer updated content is: %s\n",MODNAME,kernel_buff);
+
+//    valid = size - ret;
+    mutex_unlock(&log_get_mutex);
+    //wake_up(&p->level[level].my_queue);
+
+    free_pages((unsigned long)addr,0);
+
+    return size - ret;
+    bad_size:
+    return -1;
+
+//        while (test_and_set(p->level[level].num_thread)!=0);
 //        wake_up(&p->level[level].my_queue);
     return 0;
 }
@@ -355,27 +403,58 @@ __SYSCALL_DEFINEx(4, _tag_receive, int, tag, int, leve, char*, buffer, size_t, s
 #else
 asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
 #endif
+    struct _tag_elem *p;
+
+
+    unsigned long ret;
+    void* addr;
+    char  kernel_buff[MAX_MSG_SIZE];
+
+
+    printk("%s: sys_get_message has been called with params  %p - %d\n",MODNAME,buffer,(int)size);
+
+    if(size > MAX_MSG_SIZE) goto bad_size;
+
+    addr = (void*)get_zeroed_page(GFP_KERNEL);
+
+    if (addr == NULL) return -1;
+
+    mutex_lock(&log_get_mutex);
+//    if (size > valid) size = valid;
+    memcpy((char*)addr,(char*)kernel_buff,size);
+    mutex_unlock(&log_get_mutex);
+
+    ret = copy_to_user((char*)buffer,(char*)addr,size);
+    free_pages((unsigned long)addr,0);
+
+    printk("%s: sys_get_message copy to user returned %d\n",MODNAME,(int)ret);
+    return size - ret;
+    bad_size:
+
+    return -1;
+
+
     printk("%s: receive-params sys-call has been called %d %d %s %zu  \n",MODNAME,tag,level,buffer,size);
     //mi attesto su un nodo
     //stampo tutti i nodi
 //    print_list_tag(tag);
 
     //vado in sleep al livello level
-    elem *p = check_and_get_tag_if_exists(tag);
-    if(p!=null) {
-        //
-        printk("%s: valore tag stampato nella receive %d\n", MODNAME, p->level[3].awake);
-
-        atomic_inc((atomic_t*)&p->level[level].num_thread);//a new sleeper
-
-        wait_event_interruptible(p->level[level].my_queue, p->level[level].awake == 0);
-
-        //prima leggo poi decremento
-        atomic_dec((atomic_t*)&p->level[level].num_thread);//finally awaken
-        printk("%s: BUONGIORNOOOOOOOOO\n", MODNAME);
-    }else{
-        printk("%s: tag not found \n", MODNAME);
-    }
+//    p= check_and_get_tag_if_exists(tag);
+//    if(p!=NULL) {
+//        //
+//        printk("%s: valore tag stampato nella receive %d\n", MODNAME, p->level[3].awake);
+//
+//        atomic_inc((atomic_t*)&p->level[level].num_thread);//a new sleeper
+//
+//        wait_event_interruptible(p->level[level].my_queue, p->level[level].awake == 0);
+//
+//        //prima leggo poi decremento
+//        atomic_dec((atomic_t*)&p->level[level].num_thread);//finally awaken
+//        printk("%s: BUONGIORNOOOOOOOOO\n", MODNAME);
+//    }else{
+//        printk("%s: tag not found \n", MODNAME);
+//    }
 
     return 0;
 }
@@ -395,7 +474,7 @@ asmlinkage int sys_tag_cmd(int tag, int command){
     if (p!=NULL) {
         switch (command) {
             case AWAKE_ALL:
-//            awake_all(p, tag);
+                awake_all(p, tag);
                 printk("%s: awake all \n", MODNAME);
 
                 break;
@@ -410,7 +489,7 @@ asmlinkage int sys_tag_cmd(int tag, int command){
     }
 
 
-    printk("%s: cmd-params sys-call has been called %d %d \n",MODNAME,tag,command);
+//    printk("%s: cmd-params sys-call has been called %d %d \n",MODNAME,tag,command);
     return 0;
 }
 
@@ -493,18 +572,7 @@ int init_module(void) {
     return 0;
 
 }
-void freeList()
-{
-    elem* tmp;
 
-    while (head != NULL)
-    {
-        tmp = head;
-        head = head->next;
-        free(tmp);
-    }
-
-}
 void cleanup_module(void) {
     int i;
 #ifdef SYS_CALL_INSTALL
@@ -518,7 +586,8 @@ void cleanup_module(void) {
         protect_memory();
 #else
 #endif
-    freeList();
+    free_list();
+//    print_list_tag(8);
     printk("%s: shutting down\n",MODNAME);
         
 }
