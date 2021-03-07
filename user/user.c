@@ -8,8 +8,8 @@
 
 #define TAG_GET 134
 #define TAG_SEND 174
-#define TAG_RECEIVE 182
-#define TAG_CMD 183
+#define TAG_RECEIVE 177
+#define TAG_CMD 178
 
 
 int sys_tag_get(int key, int command, int permission){
@@ -40,10 +40,11 @@ int main(int argc, char** argv){
 //    }
 
     sys_tag_get(8, 3,3);
-//    sys_tag_send(8, 3, "ciao", 4);
 //    sys_tag_receive(8, 3, "cuai", 4);
-//    sys_tag_cmd(8, 4);
+//    sys_tag_send(8, 3, "ciao", 4);
 
-    pause();
+    sys_tag_cmd(8, AWAKE_ALL);
+
+    return;
 
 }

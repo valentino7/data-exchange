@@ -20,6 +20,9 @@
 */
 
 #define EXPORT_SYMTAB
+#define REMOVE 1
+#define AWAKE_ALL 2
+
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/fs.h>
@@ -188,6 +191,7 @@ unsigned long new_sys_call_array[] = {(unsigned long)sys_tag_get,(unsigned long)
 
 typedef struct _tag_level{
     int awake  ;
+    unsigned long num_thread __attribute__((aligned(8)));
     wait_queue_head_t my_queue;
 } level;
 
@@ -206,7 +210,29 @@ elem head = {NULL,-1,-1,NULL,NULL};
 elem tail = {NULL,-1,-1,NULL,NULL};
 spinlock_t queue_lock;
 
-int check_and_get_if_exists(int key) {
+void awake_all(elem* p, int tag){
+
+    for (i = 0; i < 32; i++){
+        p->level[level].awake=0;
+        wake_up(&p->level[level].my_queue);
+    }
+}
+
+int remove_tag(elem* p, int tag){
+
+    for (i = 0; i < 32; i++){
+        if ( p->level[level].num_thread!=0)
+            return -1;
+    }
+    //lockare
+    p->prev->next=p->next;
+    p->next->prev=p->prev;
+    free(p);
+
+    return 1;
+}
+
+int check_and_get_if_key_exists(int key) {
     struct _tag_elem *p;
     for (p=&head; p!= NULL && p->next!=NULL;  p=p->next){
         if (p->key == key)
@@ -229,6 +255,7 @@ void add_elem(int key) {
     for (i = 0; i < 32; i++){
         new->level[i].awake = 1;
         init_waitqueue_head(&new->level[i].my_queue);
+        new->level[i].num_thread=0;
     }
     printk("%s: dpo aver inizializzato awake: %d \n",MODNAME, new->level[3].awake = 1);
 
@@ -249,7 +276,7 @@ void add_elem(int key) {
 
 }
 
-elem* get_tag_byTagAndLevel(int tag){
+elem* check_and_get_tag_if_exists(int tag){
     elem *p;
     for (p=&head; p!= NULL && p->next!=NULL;  p=p->next){
         if (p->tag == tag){
@@ -282,15 +309,15 @@ asmlinkage int sys_tag_get(int key, int command, int permission){
     printk("%s: tag-params sys-call has been called %d %d %d  \n",MODNAME,key,command,permission);
 //    int t = check_and_get_if_exists(key);
     //cerco se il nodo già esiste scorrendo la lista
-    if (check_and_get_if_exists(key)==-1) {
+    if (check_and_get_if_key_exists(key)==-1) {
         //se non esiste aggiungo nodo
-        printk("%s: check %d\n", MODNAME, check_and_get_if_exists(key));
+        printk("%s: check %d\n", MODNAME, check_and_get_if_key_exists(key));
         add_elem(key);
-        printk("%s: esiste adesso il nodo? %d\n", MODNAME, check_and_get_if_exists(key));
+        printk("%s: esiste adesso il nodo? %d\n", MODNAME, check_and_get_if_key_exists(key));
         return key;
     }else{
         //se esiste ritorno il nodo esistente
-        return check_and_get_if_exists(key);
+        return check_and_get_if_key_exists(key);
     }
     //caso di errore
     return -1;
@@ -311,6 +338,8 @@ asmlinkage int sys_tag_send(int tag, int level, char* buffer, size_t size){
         elem* p = get_tag_byTagAndLevel(tag);
         p->level[level].awake=0;
         wake_up(&p->level[level].my_queue);
+
+        while (test_and_set(p->level[level].num_thread)!=0);
 //        wake_up(&p->level[level].my_queue);
     return 0;
 }
@@ -332,13 +361,21 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
 //    print_list_tag(tag);
 
     //vado in sleep al livello level
-    elem *p = get_tag_byTagAndLevel(tag);
-//
-    printk("%s: valore tag stampato nella receive %d\n", MODNAME, p->level[3].awake);
+    elem *p = check_and_get_tag_if_exists(tag);
+    if(p!=null) {
+        //
+        printk("%s: valore tag stampato nella receive %d\n", MODNAME, p->level[3].awake);
 
+        atomic_inc((atomic_t*)&p->level[level].num_thread);//a new sleeper
 
-    wait_event_interruptible(p->level[level].my_queue, p->level[level].awake ==0);
-//    printk("%s: BUONGIORNOOOOOOOOO\n", MODNAME);
+        wait_event_interruptible(p->level[level].my_queue, p->level[level].awake == 0);
+
+        //prima leggo poi decremento
+        atomic_dec((atomic_t*)&p->level[level].num_thread);//finally awaken
+        printk("%s: BUONGIORNOOOOOOOOO\n", MODNAME);
+    }else{
+        printk("%s: tag not found \n", MODNAME);
+    }
 
     return 0;
 }
@@ -354,6 +391,25 @@ __SYSCALL_DEFINEx(2, _tag_cmd, int, tag, int, command){
 #else
 asmlinkage int sys_tag_cmd(int tag, int command){
 #endif
+    elem *p = check_and_get_tag_if_exists(tag);
+    if (p!=NULL) {
+        switch (command) {
+            case AWAKE_ALL:
+//            awake_all(p, tag);
+                printk("%s: awake all \n", MODNAME);
+
+                break;
+            case REMOVE:
+                printk("%s: remove tag \n", MODNAME);
+                if (remove_tag(p, tag)==-1)
+                    printk("%s: non rimovibile \n", MODNAME);
+                break;
+        }
+    }else{
+        printk("%s: tag not found \n", MODNAME);
+    }
+
+
     printk("%s: cmd-params sys-call has been called %d %d \n",MODNAME,tag,command);
     return 0;
 }
@@ -437,7 +493,18 @@ int init_module(void) {
     return 0;
 
 }
+void freeList()
+{
+    elem* tmp;
 
+    while (head != NULL)
+    {
+        tmp = head;
+        head = head->next;
+        free(tmp);
+    }
+
+}
 void cleanup_module(void) {
     int i;
 #ifdef SYS_CALL_INSTALL
@@ -451,6 +518,7 @@ void cleanup_module(void) {
         protect_memory();
 #else
 #endif
-        printk("%s: shutting down\n",MODNAME);
+    freeList();
+    printk("%s: shutting down\n",MODNAME);
         
 }
