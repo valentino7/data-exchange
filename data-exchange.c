@@ -218,7 +218,6 @@ int check_and_get_if_exists(int key) {
 void add_elem(int key) {
     elem* new = kmalloc(sizeof (struct _tag_elem), GFP_KERNEL);
     new->level= (level*)kmalloc(32*sizeof (struct _tag_level), GFP_KERNEL);
-//    new->level=levels;
     elem *aux;
 
     new->key = key;
@@ -242,11 +241,11 @@ void add_elem(int key) {
     aux = &tail;
 
 
-    aux->prev->next = &new;
+    aux->prev->next = new;
     new->prev = aux->prev;
-    aux->prev = &new;
+    aux->prev = new;
     new->next = aux;
-    printk("%s: nodo attaccato:\n",MODNAME);
+    printk("%s: nodo attaccato\n",MODNAME);
 
 }
 
@@ -254,7 +253,6 @@ elem* get_tag_byTagAndLevel(int tag){
     elem *p;
     for (p=&head; p!= NULL && p->next!=NULL;  p=p->next){
         if (p->tag == tag){
-            printk("%s: ER tag da ritornare: %d  %d %d\n",MODNAME, p, p->tag, p->level[3].awake);
             return p;
         }
     }
@@ -266,7 +264,6 @@ void print_list_tag(int tag){
     for (p=&head; p!= NULL && p->next!=NULL;  p=p->next){
         if (p->tag == tag){
             printk("%s: STAMPO ER TAG NELLA RECEIVE: %d  \n",MODNAME,p->tag);
-            printk("%s: STAMPO ER livello NELLA RECEIVE: %d %d \n",MODNAME,p->tag, p->level, p->level[3]);
 //            printk("%s: tag: %d  \n",MODNAME,p->level[0].awake);
 //            printk("%s: tag: %d  \n",MODNAME,tag);
             return;
@@ -313,7 +310,7 @@ asmlinkage int sys_tag_send(int tag, int level, char* buffer, size_t size){
         printk("%s: send-params sys-call has been called %d %d %s %zu  \n",MODNAME,tag,level,buffer,size);
         elem* p = get_tag_byTagAndLevel(tag);
         p->level[level].awake=0;
-//        wake_up(&p->queue);
+        wake_up(&p->level[level].my_queue);
 //        wake_up(&p->level[level].my_queue);
     return 0;
 }
@@ -335,12 +332,12 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
 //    print_list_tag(tag);
 
     //vado in sleep al livello level
-//    elem *p = get_tag_byTagAndLevel(tag);
+    elem *p = get_tag_byTagAndLevel(tag);
+//
+    printk("%s: valore tag stampato nella receive %d\n", MODNAME, p->level[3].awake);
 
-//    printk("%s: valore tag stampato nella receive %d %d %d\n", MODNAME, p, p->tag, p->level[3].awake);
 
-
-//    wait_event_interruptible(p->queue, p->level[level].awake ==0);
+    wait_event_interruptible(p->level[level].my_queue, p->level[level].awake ==0);
 //    printk("%s: BUONGIORNOOOOOOOOO\n", MODNAME);
 
     return 0;
