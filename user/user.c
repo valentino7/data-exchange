@@ -11,8 +11,10 @@
 #define TAG_RECEIVE 177
 #define TAG_CMD 178
 
-#define REMOVE 1
-#define AWAKE_ALL 2
+#define REMOVE 0
+#define AWAKE_ALL 1
+#define RESTRICT 0
+#define NO_RESTRICT 1
 
 
 int sys_tag_get(int key, int command, int permission){
@@ -41,13 +43,16 @@ int main(int argc, char** argv){
 //        printf("usage: prog num-spawns sycall-num\n");
 //        return EXIT_FAILURE;
 //    }
+//    printf("get uid %d \n", getuid ());
+
+    sys_tag_get(8, 3,RESTRICT);
+    sys_tag_get(9, 3,RESTRICT);
 //    sys_tag_send(8, 3, "ciao", 4);
+//
+    char* buffer = malloc(4);
+    sys_tag_receive(8, 3, buffer, 4);
 
-//    sys_tag_get(8, 3,3);
-//    char* buffer = malloc(4);
-//    sys_tag_receive(8, 3, buffer, 4);
-
-    sys_tag_cmd(8, REMOVE);
+//    sys_tag_cmd(8, REMOVE);
 
     return;
 
