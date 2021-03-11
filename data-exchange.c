@@ -495,7 +495,7 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
     p= check_and_get_tag_if_exists(tag);
 
     if(p!=NULL) {
-        //
+
         printk("%s: valore tag stampato nella receive %d %d\n", MODNAME, p->tag, p->level[level].group->awake);
 
 
