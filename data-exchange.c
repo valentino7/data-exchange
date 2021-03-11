@@ -199,8 +199,7 @@ unsigned long new_sys_call_array[] = {(unsigned long)sys_tag_get,(unsigned long)
 typedef struct _tag_level_group{
     int awake  ;
     unsigned long num_thread __attribute__((aligned(8)));
-    spinlock_t queue_lock;
-    char  kernel_buff[MAX_MSG_SIZE];
+    char kernel_buff[MAX_MSG_SIZE];
 } group;
 
 typedef struct _tag_level{
@@ -301,14 +300,14 @@ void add_elem(int key) {
 
     for (i = 0; i < 32; i++){
         new->level[i].group = kmalloc(sizeof (struct _tag_level_group), GFP_KERNEL);
-
+        spin_lock_init(&new->level[i].queue_lock);
         new->level[i].awake = 1;
         new->level[i].group->awake = 1;
         init_waitqueue_head(&new->level[i].my_queue);
 
 //        new->level[i].num_thread=0;
     }
-    printk("%s: dpo aver inizializzato awake: %d \n",MODNAME, new->level[3].awake = 1);
+    printk("%s: dpo aver inizializzato awake: %d \n",MODNAME, new->level[3].group->awake );
 
 //        new.level[i].awake = i;
 //    wait_queue_head_t the_queue;
@@ -490,17 +489,18 @@ __SYSCALL_DEFINEx(4, _tag_receive, int, tag, int, leve, char*, buffer, size_t, s
 asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
 #endif
     struct _tag_elem *p;
-    struct _tag_level_group* copy;
+    group* copy;
     unsigned long ret;
     void* addr;
     p= check_and_get_tag_if_exists(tag);
+
     if(p!=NULL) {
         //
-        printk("%s: valore tag stampato nella receive %d\n", MODNAME, p->tag);
+        printk("%s: valore tag stampato nella receive %d %d\n", MODNAME, p->tag, p->level[level].group->awake);
 
-//        spin_lock(&p->level[level].queue_lock);
+
         spin_lock(&p->level[level].queue_lock);
-        copy = p->level[level].group;
+        copy = p->level[level].group ;
         spin_unlock(&p->level[level].queue_lock);
 
 //        atomic_inc((atomic_t*)&p->level[level].num_thread);//a new sleeper
@@ -523,7 +523,6 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
 //        char  kernel_buff[MAX_MSG_SIZE];
 
 
-        printk("%s: sys_get_message has been called with params  %p - %d\n",MODNAME,buffer,(int)size);
 
         if(size > MAX_MSG_SIZE) goto bad_size;
 
@@ -534,6 +533,10 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
         mutex_lock(&log_get_mutex);
     //    if (size > valid) size = valid;
         memcpy((char*)addr,(char*)copy->kernel_buff,size);
+
+        printk("%s: SONO NELLA RECEIVE - %s\n",MODNAME,copy->kernel_buff);
+
+
         mutex_unlock(&log_get_mutex);
 
         ret = copy_to_user((char*)buffer,(char*)addr,size);
@@ -544,6 +547,7 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
         bad_size:
 
         return -1;
+
     }else{
         printk("%s: tag not found \n", MODNAME);
         return -1;

@@ -51,7 +51,7 @@ int main(int argc, char** argv){
 //
     char* buffer = malloc(4);
     sys_tag_receive(8, 3, buffer, 4);
-    sys_tag_send(8, 3, "ciao", 4);
+//    sys_tag_send(8, 3, "ciao", 4);
 
 //    sys_tag_cmd(8, REMOVE);
 
