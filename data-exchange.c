@@ -58,8 +58,8 @@
 
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Francesco Quaglia <framcesco.quaglia@uniroma2.it>");
-MODULE_DESCRIPTION("USCTM");
+MODULE_AUTHOR("Valentino Perrone <perrone.valentino@gmail.com>");
+MODULE_DESCRIPTION("DATA_EXCHANGE");
 
 #define MODNAME "DATA-EXCHANGE"
 static DEFINE_MUTEX(log_get_mutex);
@@ -181,7 +181,6 @@ int sys_tag_get(int, int, int);
 int sys_tag_send(int, int, char*, size_t);
 int sys_tag_receive(int, int, char*, size_t);
 int sys_tag_cmd(int, int);
-//typedef int (*wait_queue_func_t)(struct wait_queue_entry *wq_entry, unsigned mode, int flags, void *key);
 
 #define MAX_FREE 15
 int free_entries[MAX_FREE];
@@ -197,10 +196,21 @@ unsigned long new_sys_call_array[] = {(unsigned long)sys_tag_get,(unsigned long)
 //unsigned long count __attribute__((aligned(8)));//this is used to audit how many threads are still sleeping onto the sleep/wakeup queue
 //module_param(count,ulong,0660);
 
+typedef struct _tag_level_group{
+    int awake  ;
+    unsigned long num_thread __attribute__((aligned(8)));
+    spinlock_t queue_lock;
+    char  kernel_buff[MAX_MSG_SIZE];
+} group;
+
 typedef struct _tag_level{
     int awake  ;
-//    unsigned long num_thread __attribute__((aligned(8)));
+    unsigned long num_thread __attribute__((aligned(8)));
     wait_queue_head_t my_queue;
+    struct _tag_level_group* group;
+    spinlock_t queue_lock;
+
+
 } level;
 
 //almeno 256 servizi runnabili
@@ -216,7 +226,6 @@ typedef struct _tag_elem{
 
 elem head = {NULL,-1,-1,NULL,NULL};
 elem tail = {NULL,-1,-1,NULL,NULL};
-spinlock_t queue_lock;
 
 //funzione test da togliere
 void printList(void){
@@ -242,10 +251,7 @@ void print_list_tag(int tag){
     }
 }
 
-int* my_wait_func(struct wait_queue_entry *wq_entry, unsigned mode, int flags, void *key){
-    printk("%s:sono nella funzione wait \n", MODNAME);
 
-}
 
 void awake_all(elem* p, int tag){
     int i;
@@ -294,7 +300,10 @@ void add_elem(int key) {
 
 
     for (i = 0; i < 32; i++){
+        new->level[i].group = kmalloc(sizeof (struct _tag_level_group), GFP_KERNEL);
+
         new->level[i].awake = 1;
+        new->level[i].group->awake = 1;
         init_waitqueue_head(&new->level[i].my_queue);
 
 //        new->level[i].num_thread=0;
@@ -333,6 +342,7 @@ elem* check_and_get_tag_if_exists(int tag){
 void free_list(void)
 {
     elem *n = head.next;
+    elem *n1;
     printk("%s:LIBERO MEMORIA 1\n", MODNAME);
 
     head.next=NULL;
@@ -344,7 +354,7 @@ void free_list(void)
         n->prev=NULL;
         printk("%s:LIBERO MEMORIA 3\n", MODNAME);
 
-        elem *n1 = n;
+        n1 = n;
         printk("%s:LIBERO MEMORIA 4\n", MODNAME);
 
         n = n->next;
@@ -400,47 +410,67 @@ static unsigned long sys_tag_get = (unsigned long) __x64_sys_tag_get;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
 __SYSCALL_DEFINEx(4, _tag_send, int, tag, int, level, char*, buffer, size_t, size){
 #else
+    /*scrivo area condivisa
+     * lock on wait queue e leggo atomic counter svegliando poi i thread dormienti e unlock
+     * while var local atomic counter == version reader*/
 asmlinkage int sys_tag_send(int tag, int level, char* buffer, size_t size){
 #endif
     elem* p;
-
     unsigned long ret;
     void* addr;
+    group* copy;
     printk("%s: send-params sys-call has been called %d %d %s %zu  \n",MODNAME,tag,level,buffer,size);
 //    p->level[level].awake=0;
 
-    if(size >= (MAX_MSG_SIZE -1)) goto bad_size;//leave 1 byte for string terminator
-
-    addr = (void*)get_zeroed_page(GFP_KERNEL);
-
-    if (addr == NULL) return -1;
-
-    ret = copy_from_user((char*)addr,(char*)buffer,size);//returns the number of bytes NOT copied
-
-    mutex_lock(&log_get_mutex);
-    memcpy((char*)kernel_buff,(char*)addr,size-ret);
-    kernel_buff[size - ret] = '\0';
-
-
-    printk("%s: kernel buffer updated content is: %s\n",MODNAME,kernel_buff);
-
-//    valid = size - ret;
-    mutex_unlock(&log_get_mutex);
-    //wake_up(&p->level[level].my_queue);
-
-    free_pages((unsigned long)addr,0);
-
     p= check_and_get_tag_if_exists(tag);
+    if(p!=NULL) {
 
-    p->level[level].awake=0;
+        if (size >= (MAX_MSG_SIZE - 1)) goto bad_size;//leave 1 byte for string terminator
 
-    printk("%s la lista è vuota? %d\n",MODNAME,waitqueue_active(&p->level[level].my_queue));
-    printk("%s num elementi in lista %d\n",MODNAME,waitqueue_active(&p->level[level].my_queue));
+        addr = (void *) get_zeroed_page(GFP_KERNEL);
 
-    wake_up(&p->level[level].my_queue);
-    return size - ret;
+        if (addr == NULL) return -1;
+
+        ret = copy_from_user((char *) addr, (char *) buffer, size);//returns the number of bytes NOT copied
+
+
+
+        //INIZIO LAVORO PER SVEGLIARE I THREAD
+        //PRENDO IL LOCK SUL GROUP CAMBIO LA VISTA DEL PUNTATORE A GROUP
+
+        spin_lock(&p->level[level].queue_lock);
+        copy = p->level[level].group;
+        p->level[level].group = kmalloc(sizeof(struct _tag_level_group), GFP_KERNEL);
+        p->level[level].group->awake = 1;
+        spin_unlock(&p->level[level].queue_lock);
+
+        //SCRIVO MEMORIA CONDIVISA
+//        mutex_lock(&log_get_mutex);
+        memcpy((char *) copy->kernel_buff, (char *) addr, size - ret);
+        copy->kernel_buff[size - ret] = '\0';
+        printk("%s: kernel buffer updated content is: %s\n", MODNAME, copy->kernel_buff);
+        //    valid = size - ret;
+        mutex_unlock(&log_get_mutex);
+        free_pages((unsigned long) addr, 0);
+
+        //INFINE SVEGLIO I THREAD
+        copy->awake = 0;
+        printk("%s la lista è vuota? %d\n", MODNAME, waitqueue_active(&p->level[level].my_queue));
+//        printk("%s numero thread %d\n",MODNAME,local_num_thread);
+        wake_up(&p->level[level].my_queue);
+
+        //TODO devo implementare la parte che fa la free e aspetta che tutti i thread abbiano letto
+
+
+        return size - ret;
+    }else{
+            printk("%s: tag not found \n", MODNAME);
+            return -1;
+        }
+
+
     bad_size:
-    return -1;
+        return -1;
 
 
 //    while (test_and_set(p->level[level].num_thread)!=0);
@@ -460,23 +490,36 @@ __SYSCALL_DEFINEx(4, _tag_receive, int, tag, int, leve, char*, buffer, size_t, s
 asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
 #endif
     struct _tag_elem *p;
-
+    struct _tag_level_group* copy;
+    unsigned long ret;
+    void* addr;
     p= check_and_get_tag_if_exists(tag);
     if(p!=NULL) {
         //
         printk("%s: valore tag stampato nella receive %d\n", MODNAME, p->tag);
 
-//        atomic_inc((atomic_t*)&p->level[level].num_thread);//a new sleeper
+//        spin_lock(&p->level[level].queue_lock);
+        spin_lock(&p->level[level].queue_lock);
+        copy = p->level[level].group;
+        spin_unlock(&p->level[level].queue_lock);
 
-        wait_event_interruptible(p->level[level].my_queue, p->level[level].awake == 0);
+//        atomic_inc((atomic_t*)&p->level[level].num_thread);//a new sleeper
+        wait_event_interruptible(p->level[level].my_queue, copy->awake == 0);
+//        spin_unlock(&p->level[level].queue_lock);
+        if(copy->awake == 1){
+            printk("%s: thread exiting sleep for signal\n",MODNAME);
+            return -EINTR;
+        }
 
         //prima leggo poi decremento
 //        atomic_dec((atomic_t*)&p->level[level].num_thread);//finally awaken
         printk("%s: BUONGIORNOOOOOOOOO\n", MODNAME);
 
 
-        unsigned long ret;
-        void* addr;
+        //INIZIO LETTURA MEMORIA CONDIVISA
+        //TODO : LETTURA E INCREMENTO NUMERO READERS
+
+
 //        char  kernel_buff[MAX_MSG_SIZE];
 
 
@@ -490,7 +533,7 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
 
         mutex_lock(&log_get_mutex);
     //    if (size > valid) size = valid;
-        memcpy((char*)addr,(char*)kernel_buff,size);
+        memcpy((char*)addr,(char*)copy->kernel_buff,size);
         mutex_unlock(&log_get_mutex);
 
         ret = copy_to_user((char*)buffer,(char*)addr,size);
@@ -503,6 +546,7 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
         return -1;
     }else{
         printk("%s: tag not found \n", MODNAME);
+        return -1;
     }
 
 //    printk("%s: receive-params sys-call has been called %d %d %s %zu  \n",MODNAME,tag,level,buffer,size);
