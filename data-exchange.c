@@ -25,7 +25,8 @@
 #define MAX_MSG_SIZE 4096
 #define RESTRICT 0
 #define NO_RESTRICT 1
-
+#define CREATE 0
+#DEFINE OPEN 1
 
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -381,12 +382,30 @@ __SYSCALL_DEFINEx(3, _tag_get, int, key, int, command, int, permission){
 asmlinkage int sys_tag_get(int key, int command, int permission){
 #endif
     printk("%s: tag-params sys-call has been called %d %d %d  \n",MODNAME,key,command,permission);
-//    int t = check_and_get_if_exists(key);
-    //cerco se il nodo già esiste scorrendo la lista
     printk("%s: tag user id %d\n",MODNAME,current->cred->euid);
+
+    if (command != CREATE && command != OPEN ){
+        printk("%s: command non valido %d\n",MODNAME,current->cred->euid);
+        return -1;
+    }
+    if (permission != RESTRICT && permission != NO_RESTRICT ){
+        printk("%s: permission non valido %d\n",MODNAME,current->cred->euid);
+        return -1;
+    }
+
+    //check if key==ipc private
+    if (key==IPC_PRIVATE){
+        tag=max_tag+1;
+        max-tag;
+    }
 
     if (check_and_get_if_key_exists(key)==-1) {
         //se non esiste aggiungo nodo
+        if(command == OPEN){
+            printk("%s: tag già aperto error%d\n",MODNAME,current->cred->euid);
+            return -1;
+        }
+
         printk("%s: check %d\n", MODNAME, check_and_get_if_key_exists(key));
         add_elem(key);
         printk("%s: esiste adesso il nodo? %d\n", MODNAME, check_and_get_if_key_exists(key));
@@ -395,6 +414,10 @@ asmlinkage int sys_tag_get(int key, int command, int permission){
         return key;
     }else{
         //se esiste ritorno il nodo esistente
+        if(command == CREATE){
+            printk("%s: tag non esiste error%d\n",MODNAME,current->cred->euid);
+            return -1;
+        }
         return check_and_get_if_key_exists(key);
     }
     //caso di errore
@@ -636,6 +659,7 @@ unprotect_memory(void)
 #endif
 
 
+
 int init_module(void) {
 	
 	int i,j;
@@ -643,6 +667,48 @@ int init_module(void) {
 	printk("%s: initializing\n",MODNAME);
     head.next = &tail;// setup initial double linked list
     tail.prev = &head;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 	syscall_table_finder(&hacked_ni_syscall, &hacked_syscall_tbl);
 
 	if(!hacked_syscall_tbl){
@@ -693,7 +759,7 @@ void cleanup_module(void) {
         protect_memory();
 #else
 #endif
-    free_list();
+//    free_list();
 //    print_list_tag(8);
     printk("%s: shutting down\n",MODNAME);
         
