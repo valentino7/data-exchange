@@ -408,14 +408,16 @@ elem* alloc_tag_service() {
 void free_list(void)
 {
     elem *p;
-    list_for_each_safe(p, &list_tag_rcu, node) {
+    elem* tmp_elem;
+    //position n head, n è una struttura list_head temporanea per usarla come storage temporaneo
+    list_for_each_safe(p, node, &list_tag_rcu) {
+        tmp_elem = list_entry(p, elem, node);
         list_del(p);
-        kfree(p->);
         for (i = 0; i < 32; i++) {
-          kfree(p->level[i].group);
-          kfree(p->level[i]);
+          kfree(tmp_elem->level[i].group);
+          kfree(tmp_elem->level[i]);
         }
-        kfree(p);
+        kfree(tmp_eme);
     }
 
 
