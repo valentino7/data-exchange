@@ -300,9 +300,9 @@ int remove_tag(elem* p, int tag){
     p->num_thread_per_tag=-1;
     spin_unlock(&p->tag_lock);
 
-    spin_lock(&list_tag_rcu);
+    spin_lock(&list_tag_lock);
     list_del_rcu(&p->node);
-    spin_unlock(&list_tag_rcu);
+    spin_unlock(&list_tag_lock);
 
     //call_rcu(&b->rcu, book_reclaim_callback);
 
@@ -382,7 +382,8 @@ elem* check_and_get_tag_if_exists(int tag){
     return NULL;
 }
 
-elem* alloc_tag_service() {
+elem* alloc_tag_service(int key) {
+    int i;
     elem *new = kmalloc(sizeof(struct _tag_elem), GFP_KERNEL);
     new->level = (level *) kmalloc(32 * sizeof(struct _tag_level), GFP_KERNEL);
 
@@ -407,16 +408,17 @@ elem* alloc_tag_service() {
 void free_list(void)
 {
     int i;
-    elem *p;
+    struct list_head *p,*node;
+    elem l;
     elem* tmp_elem;
     //position n head, n è una struttura list_head temporanea per usarla come storage temporaneo
-    list_for_each_safe(p, node, &list_tag_rcu) {
+    list_for_each_safe(p, node, &l.node) {
         tmp_elem = list_entry(p, elem, node);
         list_del(p);
         for (i = 0; i < 32; i++) {
           kfree(tmp_elem->level[i].group);
-          kfree(tmp_elem->level[i]);
         }
+        kfree(tmp_elem->level);
         kfree(tmp_elem);
     }
 
@@ -487,7 +489,7 @@ asmlinkage int sys_tag_get(int key, int command, int permission){
         }
         return tag;
     }else if (command== CREATE){
-        p = alloc_tag_service();
+        p = alloc_tag_service(key);
         // se il nodo non esiste qualcuno potrebbe inserire lo stesso nel mentre dopo il check e quindi devo bloccare le insert
         spin_lock(&list_tag_lock);
         //TODO NON FARE READ LOCK QUI
