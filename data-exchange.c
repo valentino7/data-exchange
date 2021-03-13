@@ -26,8 +26,11 @@
 #define RESTRICT 0
 #define NO_RESTRICT 1
 #define CREATE 0
-#DEFINE OPEN 1
+#define OPEN 1
+//#define IPC_PRIVATE 0
 
+#include <linux/rculist.h>
+#include <linux/preempt.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/fs.h>
@@ -204,13 +207,11 @@ typedef struct _tag_level_group{
 } group;
 
 typedef struct _tag_level{
-    int awake  ;
+    int level_awake  ;
     unsigned long num_thread __attribute__((aligned(8)));
     wait_queue_head_t my_queue;
     struct _tag_level_group* group;
     spinlock_t queue_lock;
-
-
 } level;
 
 //almeno 256 servizi runnabili
@@ -219,13 +220,26 @@ typedef struct _tag_elem{
     int tag;
     int key;
 
+    spinlock_t tag_lock;
+
+    int num_thread_per_tag __attribute__((aligned(8)));
+
+
+    struct list_head node;
+    struct rcu_head rcu;
+
     struct _tag_elem * next;
     struct _tag_elem * prev;
     //tid creator
 } elem;
 
-elem head = {NULL,-1,-1,NULL,NULL};
-elem tail = {NULL,-1,-1,NULL,NULL};
+elem head = {NULL,-1,-1,NULL,NULL,NULL,NULL};
+elem tail = {NULL,-1,-1,NULL,NULL,NULL,NULL};
+
+//lista RCU
+static LIST_HEAD(list_tag_rcu);
+static spinlock_t list_tag_lock;
+
 
 //funzione test da togliere
 void printList(void){
@@ -251,124 +265,188 @@ void print_list_tag(int tag){
     }
 }
 
+static void tag_reclaim_callback(struct rcu_head *rcu) {
+    elem *p = container_of(rcu, elem, rcu);
+
+    /**
+     * Why print preemt_count??
+     *
+     * To check whether this callback is atomic context or not.
+     * preempt_count here is more than 0. Because it is irq context.
+    */
+    pr_info("callback free : %lx, preempt_count : %d\n", (unsigned long)p, preempt_count());
+    kfree(p);
+}
 
 
 void awake_all(elem* p, int tag){
     int i;
     for (i = 0; i < 32; i++){
-        p->level[i].awake=0;
+//        p->level[i].awake=0;
         wake_up(&p->level[i].my_queue);
     }
 }
 
 int remove_tag(elem* p, int tag){
     int i;
-    printList();
-    for (i = 0; i < 32; i++){
-        if ( waitqueue_active(&p->level[i].my_queue))
-            return -1;
-    }
-    //lockare
-    p->prev->next=p->next;
-    p->next->prev=p->prev;
-    kfree(p);
 
-    printList();
+    spin_lock(&p->tag_lock);
+    //check se contator è -1
+    if (p->num_thread_per_tag != 0){
+        printk("%s: ci sono waiters \n", MODNAME);
+        spin_unlock(&p->tag_lock);
+        return -1;
+    }
+    //incremento contatore atomic per tag di accessi
+    p->num_thread_per_tag=-1;
+    spin_unlock(&p->tag_lock);
+
+    spin_lock(&list_tag_rcu);
+    list_del_rcu(&p->node);
+    spin_unlock(&list_tag_rcu);
+
+    //call_rcu(&b->rcu, book_reclaim_callback);
+
+    synchronize_rcu();
+    kfree(b);
+
+
+
+
+
+    //lockare
+//    p->prev->next=p->next;
+//    p->next->prev=p->prev;
+//    kfree(p);
+//
+//    printList();
     return 1;
 }
 
-int check_and_get_if_key_exists(int key) {
+int check_and_get_tag_if_key_exists(int key) {
     struct _tag_elem *p;
-    for (p=&head; p!= NULL && p->next!=NULL;  p=p->next){
-        if (p->key == key)
-            return p->tag;
+    int tag=-1;
+    rcu_read_lock();
+//    for (p=&head; p!= NULL && p->next!=NULL;  p=p->next){
+//
+//        if (p->key == key)
+//            return p->tag;
+//    }
+    list_for_each_entry(p, &list_tag_rcu, node) {
+        if(p->key== key) {
+            tag=p->tag;
+            break;
+        }
     }
-    return -1;
+    rcu_read_unlock();
+    return tag;
 }
 
-void add_elem(int key) {
-    elem *aux;
-    int i;
+void add_elem(elem* p) {
+//    elem *aux;
 
-    elem* new = kmalloc(sizeof (struct _tag_elem), GFP_KERNEL);
-    new->level= (level*)kmalloc(32*sizeof (struct _tag_level), GFP_KERNEL);
-
-    new->key = key;
-    new->tag = key;
-    //inizializzo le 32 wait qeue
-    printk("%s: prima aver inizializzato awake:\n",MODNAME);
-
-
-    for (i = 0; i < 32; i++){
-        new->level[i].group = kmalloc(sizeof (struct _tag_level_group), GFP_KERNEL);
-        spin_lock_init(&new->level[i].queue_lock);
-        new->level[i].awake = 1;
-        new->level[i].group->awake = 1;
-        init_waitqueue_head(&new->level[i].my_queue);
-
-//        new->level[i].num_thread=0;
-    }
-    printk("%s: dpo aver inizializzato awake: %d \n",MODNAME, new->level[3].group->awake );
-
-//        new.level[i].awake = i;
-//    wait_queue_head_t the_queue;
-//    init_waitqueue_head(&new->queue);
-//    DECLARE_WAIT_QUEUE_HEAD(the_queue);
-    new->next=NULL;
-    new->prev=NULL;
-    aux = &tail;
+//
+//    new->next=NULL;
+//    new->prev=NULL;
+//    aux = &tail;
+//
+//
+//    aux->prev->next = new;
+//    new->prev = aux->prev;
+//    aux->prev = new;
+//    new->next = aux;
+//    printk("%s nodo attaccato\n",MODNAME);
 
 
-    aux->prev->next = new;
-    new->prev = aux->prev;
-    aux->prev = new;
-    new->next = aux;
-    printk("%s nodo attaccato\n",MODNAME);
 
+
+    //list_head * new, list_head *head
+    //aggiungo il nodo alla lista rcu
+    list_add_rcu(&p->node, &list_tag_rcu);
 }
 
 elem* check_and_get_tag_if_exists(int tag){
+//    elem *p;
+//    for (p=&head; p!= NULL && p->next!=NULL;  p=p->next){
+//        if (p->tag == tag){
+//            return p;
+//        }
+//    }
     elem *p;
-    for (p=&head; p!= NULL && p->next!=NULL;  p=p->next){
-        if (p->tag == tag){
+    //pointer da usare nel loop, head, member
+    list_for_each_entry(p, &list_tag_rcu, node) {
+        if(p->tag == tag) {
             return p;
         }
     }
+
     return NULL;
 }
 
+elem* alloc_tag_service() {
+    elem *new = kmalloc(sizeof(struct _tag_elem), GFP_KERNEL);
+    new->level = (level *) kmalloc(32 * sizeof(struct _tag_level), GFP_KERNEL);
 
+    new->key = key;
+    new->tag = key;
+    //inizializzo le 32 wait queue
+    printk("%s: prima aver inizializzato awake:\n", MODNAME);
+
+
+    for (i = 0; i < 32; i++) {
+        new->level[i].group = kmalloc(sizeof(struct _tag_level_group), GFP_KERNEL);
+        spin_lock_init(&new->level[i].queue_lock);
+
+        new->level[i].group->awake = 1;
+        init_waitqueue_head(&new->level[i].my_queue);
+
+    }
+    printk("%s: dpo aver inizializzato awake: %d \n", MODNAME, new->level[3].group->awake);
+    return new;
+}
 
 void free_list(void)
 {
-    elem *n = head.next;
-    elem *n1;
-    printk("%s:LIBERO MEMORIA 1\n", MODNAME);
-
-    head.next=NULL;
-    printk("%s:LIBERO MEMORIA 1\n", MODNAME);
-
-    while(n!=NULL ){
-        printk("%s:LIBERO MEMORIA 2\n", MODNAME);
-
-        n->prev=NULL;
-        printk("%s:LIBERO MEMORIA 3\n", MODNAME);
-
-        n1 = n;
-        printk("%s:LIBERO MEMORIA 4\n", MODNAME);
-
-        n = n->next;
-        printk("%s:LIBERO MEMORIA 5\n", MODNAME);
-
-        //se sono arrivato alla tail è statica e quindi non faccio la free
-        if (n !=NULL){
-            printk("%s:LIBERO MEMORIA 6\n", MODNAME);
-            kfree(n1);
+    elem *p;
+    list_for_each_safe(p, &list_tag_rcu, node) {
+        list_del(p);
+        kfree(p->);
+        for (i = 0; i < 32; i++) {
+          kfree(p->level[i].group);
+          kfree(p->level[i]);
         }
-        printk("%s:LIBERO MEMORIA 7\n", MODNAME);
-
+        kfree(p);
     }
-    printk("%s:LIBERO MEMORIA\n", MODNAME);
+
+
+//    elem *n = head.next;
+//    elem *n1;
+//    printk("%s:LIBERO MEMORIA 1\n", MODNAME);
+//
+//    head.next=NULL;
+//    printk("%s:LIBERO MEMORIA 1\n", MODNAME);
+//
+//    while(n!=NULL ){
+//        printk("%s:LIBERO MEMORIA 2\n", MODNAME);
+//
+//        n->prev=NULL;
+//        printk("%s:LIBERO MEMORIA 3\n", MODNAME);
+//
+//        n1 = n;
+//        printk("%s:LIBERO MEMORIA 4\n", MODNAME);
+//
+//        n = n->next;
+//        printk("%s:LIBERO MEMORIA 5\n", MODNAME);
+//
+//        //se sono arrivato alla tail è statica e quindi non faccio la free
+//        if (n !=NULL){
+//            printk("%s:LIBERO MEMORIA 6\n", MODNAME);
+//            kfree(n1);
+//        }
+//        printk("%s:LIBERO MEMORIA 7\n", MODNAME);
+//
+//    }
+//    printk("%s:LIBERO MEMORIA\n", MODNAME);
 }
 
 
@@ -381,44 +459,75 @@ __SYSCALL_DEFINEx(3, _tag_get, int, key, int, command, int, permission){
 #else
 asmlinkage int sys_tag_get(int key, int command, int permission){
 #endif
+
+    int tag;
+    elem* p;
+
     printk("%s: tag-params sys-call has been called %d %d %d  \n",MODNAME,key,command,permission);
     printk("%s: tag user id %d\n",MODNAME,current->cred->euid);
 
-    if (command != CREATE && command != OPEN ){
-        printk("%s: command non valido %d\n",MODNAME,current->cred->euid);
-        return -1;
-    }
+
     if (permission != RESTRICT && permission != NO_RESTRICT ){
         printk("%s: permission non valido %d\n",MODNAME,current->cred->euid);
         return -1;
     }
 
     //check if key==ipc private
-    if (key==IPC_PRIVATE){
-        tag=max_tag+1;
-        max-tag;
+//    if (key!=IPC_PRIVATE || key){
+//        tag=max_tag+1;
+//        max-tag;
+//    }
+    if(command == OPEN){
+        tag = check_and_get_tag_if_key_exists(key);
+        if (tag==-1) {
+            printk("%s: tag non aperto error%d\n", MODNAME, current->cred->euid);
+            return -1;
+        }
+        return tag;
+    }else if{ if command== CREATE}{
+        int i;
+        p = alloc_tag_service();
+        // se il nodo non esiste qualcuno potrebbe inserire lo stesso nel mentre dopo il check e quindi devo bloccare le insert
+        spin_lock(&list_tag_lock);
+        //TODO NON FARE READ LOCK QUI
+        tag = check_and_get_tag_if_key_exists(key);
+        if(tag!=-1) {
+            printk("%s: tag gia esiste error%d\n", MODNAME, current->cred->euid);
+            spin_unlock(&list_tag_lock);
+            return -1;
+        }
+        //spinlock per serializzare gli scrittori
+        add_elem(p);
+        spin_unlock(&list_tag_lock);
+
+        //rilascio lock
+        return tag;
+    }else{
+        printk("%s: command non valido %d\n",MODNAME,current->cred->euid);
+        return -1;
     }
 
-    if (check_and_get_if_key_exists(key)==-1) {
+    //lock read
+//    tag = check_and_get_if_key_exists(key);
+//    if (tag==-1) {
         //se non esiste aggiungo nodo
-        if(command == OPEN){
-            printk("%s: tag già aperto error%d\n",MODNAME,current->cred->euid);
-            return -1;
-        }
-
-        printk("%s: check %d\n", MODNAME, check_and_get_if_key_exists(key));
-        add_elem(key);
-        printk("%s: esiste adesso il nodo? %d\n", MODNAME, check_and_get_if_key_exists(key));
-
-        printList();
-        return key;
-    }else{
+    //unlock read
+//        if(command == OPEN){
+//            printk("%s: tag già aperto error%d\n",MODNAME,current->cred->euid);
+//            return -1;
+//        }
+        //spinlock per serializzare gli scrittori
+//        add_elem(key);
+        //rilascio lock
+//        printList();
+//        return key;
+//    }else{
         //se esiste ritorno il nodo esistente
-        if(command == CREATE){
-            printk("%s: tag non esiste error%d\n",MODNAME,current->cred->euid);
-            return -1;
-        }
-        return check_and_get_if_key_exists(key);
+//        if(command == CREATE){
+//            printk("%s: tag non esiste error%d\n",MODNAME,current->cred->euid);
+//            return -1;
+//        }
+//        return tag;
     }
     //caso di errore
     return -1;
@@ -444,19 +553,21 @@ asmlinkage int sys_tag_send(int tag, int level, char* buffer, size_t size){
     printk("%s: send-params sys-call has been called %d %d %s %zu  \n",MODNAME,tag,level,buffer,size);
 //    p->level[level].awake=0;
 
+    //read lock sulla lettura
+    //TODO CHECK SULLA PERMISSION
+
+    //trade off tra sicurezza e velocità
+    if (size >= (MAX_MSG_SIZE - 1)) goto bad_size;//leave 1 byte for string terminator
+
+    addr = (void *) get_zeroed_page(GFP_KERNEL);
+
+    if (addr == NULL) return -1;
+
+    ret = copy_from_user((char *) addr, (char *) buffer, size);//returns the number of bytes NOT copied
+
+    rcu_read_lock();
     p= check_and_get_tag_if_exists(tag);
     if(p!=NULL) {
-
-        if (size >= (MAX_MSG_SIZE - 1)) goto bad_size;//leave 1 byte for string terminator
-
-        addr = (void *) get_zeroed_page(GFP_KERNEL);
-
-        if (addr == NULL) return -1;
-
-        ret = copy_from_user((char *) addr, (char *) buffer, size);//returns the number of bytes NOT copied
-
-
-
         //INIZIO LAVORO PER SVEGLIARE I THREAD
         //PRENDO IL LOCK SUL GROUP CAMBIO LA VISTA DEL PUNTATORE A GROUP
 
@@ -480,15 +591,18 @@ asmlinkage int sys_tag_send(int tag, int level, char* buffer, size_t size){
         printk("%s la lista è vuota? %d\n", MODNAME, waitqueue_active(&p->level[level].my_queue));
 //        printk("%s numero thread %d\n",MODNAME,local_num_thread);
         wake_up(&p->level[level].my_queue);
+        rcu_read_unlock();
 
         //TODO devo implementare la parte che fa la free e aspetta che tutti i thread abbiano letto
 
 
         return size - ret;
     }else{
-            printk("%s: tag not found \n", MODNAME);
-            return -1;
-        }
+        rcu_read_unlock();
+
+        printk("%s: tag not found \n", MODNAME);
+        return -1;
+    }
 
 
     bad_size:
@@ -515,7 +629,24 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
     group* copy;
     unsigned long ret;
     void* addr;
+
+    //TODO PERMISSION CHECK
+
+    //serve read lock perchè se dealloco la struttura p, non posso piu accedere alla variabile lock
+    rcu_read_lock();
+    //sezione critica condivisa con remover con contatore atomico per tag di accessi
     p= check_and_get_tag_if_exists(tag);
+    spin_lock(&p->tag_lock);
+    //check se contator è -1
+    if (p->num_thread_per_tag == -1){
+        printk("%s: tag not found \n", MODNAME);
+        spin_unlock(&p->tag_lock);
+        rcu_read_unlock();
+        return -1;
+    }
+    //incremento contatore atomic per tag di accessi
+    p->num_thread_per_tag++;
+    spin_unlock(&p->tag_lock);
 
     if(p!=NULL) {
 
@@ -556,11 +687,15 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
         mutex_lock(&log_get_mutex);
     //    if (size > valid) size = valid;
         memcpy((char*)addr,(char*)copy->kernel_buff,size);
-
         printk("%s: SONO NELLA RECEIVE - %s\n",MODNAME,copy->kernel_buff);
-
-
         mutex_unlock(&log_get_mutex);
+
+        //DECREMENTO ATOMIC COUNTER PER TAG
+        spin_lock(&p->tag_lock);
+        p->num_thread_per_tag--;
+        spin_unlock(&p->tag_lock);
+        rcu_read_unlock();
+
 
         ret = copy_to_user((char*)buffer,(char*)addr,size);
         free_pages((unsigned long)addr,0);
@@ -572,6 +707,7 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
         return -1;
 
     }else{
+        rcu_read_unlock();
         printk("%s: tag not found \n", MODNAME);
         return -1;
     }
@@ -598,7 +734,12 @@ __SYSCALL_DEFINEx(2, _tag_cmd, int, tag, int, command){
 #else
 asmlinkage int sys_tag_cmd(int tag, int command){
 #endif
-    elem *p = check_and_get_tag_if_exists(tag);
+    //TODO PERMISSION CHECK
+    elem* p;
+    rcu_read_lock();
+    p = check_and_get_tag_if_exists(tag);
+    rcu_read_unlock();
+
     printk("%s: sono nel command %d %d\n", MODNAME, command, p->tag);
 
     if (p!=NULL) {
@@ -665,51 +806,15 @@ int init_module(void) {
 	int i,j;
 		
 	printk("%s: initializing\n",MODNAME);
+
+	//TODO DA CANCELLARE
     head.next = &tail;// setup initial double linked list
     tail.prev = &head;
 
+    spin_lock_init(&list_tag_lock);
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-	syscall_table_finder(&hacked_ni_syscall, &hacked_syscall_tbl);
+    syscall_table_finder(&hacked_ni_syscall, &hacked_syscall_tbl);
 
 	if(!hacked_syscall_tbl){
 		printk("%s: failed to find the sys_call_table\n",MODNAME);
