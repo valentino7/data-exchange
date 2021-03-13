@@ -288,7 +288,6 @@ void awake_all(elem* p, int tag){
 }
 
 int remove_tag(elem* p, int tag){
-    int i;
 
     spin_lock(&p->tag_lock);
     //check se contator è -1
@@ -308,7 +307,7 @@ int remove_tag(elem* p, int tag){
     //call_rcu(&b->rcu, book_reclaim_callback);
 
     synchronize_rcu();
-    kfree(b);
+    kfree(p);
 
 
 
@@ -392,7 +391,7 @@ elem* alloc_tag_service() {
     //inizializzo le 32 wait queue
     printk("%s: prima aver inizializzato awake:\n", MODNAME);
 
-
+    spin_lock_init(&new->tag_lock);
     for (i = 0; i < 32; i++) {
         new->level[i].group = kmalloc(sizeof(struct _tag_level_group), GFP_KERNEL);
         spin_lock_init(&new->level[i].queue_lock);
@@ -407,6 +406,7 @@ elem* alloc_tag_service() {
 
 void free_list(void)
 {
+    int i;
     elem *p;
     elem* tmp_elem;
     //position n head, n è una struttura list_head temporanea per usarla come storage temporaneo
@@ -417,7 +417,7 @@ void free_list(void)
           kfree(tmp_elem->level[i].group);
           kfree(tmp_elem->level[i]);
         }
-        kfree(tmp_eme);
+        kfree(tmp_elem);
     }
 
 
@@ -486,8 +486,7 @@ asmlinkage int sys_tag_get(int key, int command, int permission){
             return -1;
         }
         return tag;
-    }else if{ if command== CREATE}{
-        int i;
+    }else if (command== CREATE){
         p = alloc_tag_service();
         // se il nodo non esiste qualcuno potrebbe inserire lo stesso nel mentre dopo il check e quindi devo bloccare le insert
         spin_lock(&list_tag_lock);
@@ -530,7 +529,7 @@ asmlinkage int sys_tag_get(int key, int command, int permission){
 //            return -1;
 //        }
 //        return tag;
-    }
+
     //caso di errore
     return -1;
 }
