@@ -45,12 +45,12 @@ int main(int argc, char** argv){
 //    }
 //    printf("get uid %d \n", getuid ());
 
-    sys_tag_get(8, 3,RESTRICT);
+    sys_tag_get(8, 0,RESTRICT);
 //    sys_tag_get(9, 3,RESTRICT);
 //    sys_tag_send(8, 3, "ciao", 4);
 //
-    char* buffer = malloc(4);
-    sys_tag_receive(8, 3, buffer, 4);
+//    char* buffer = malloc(4);
+//    sys_tag_receive(8, 3, buffer, 4);
 //    sys_tag_send(8, 3, "ciao", 4);
 
 //    sys_tag_cmd(8, REMOVE);

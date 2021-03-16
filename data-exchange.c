@@ -29,6 +29,17 @@
 #define OPEN 1
 //#define IPC_PRIVATE 0
 
+
+
+
+
+
+
+
+
+
+
+
 #include <linux/rculist.h>
 #include <linux/preempt.h>
 #include <linux/module.h>
@@ -41,6 +52,13 @@
 #include <linux/mutex.h>
 #include <linux/mm.h>
 #include <linux/sched.h>
+
+#include <linux/ipc_namespace.h>
+#include <linux/rhashtable.h>
+
+#include <asm/current.h>
+#include <linux/uaccess.h>
+
 #include <linux/slab.h>
 #include <linux/version.h>
 #include <linux/interrupt.h>
@@ -53,7 +71,10 @@
 #include <linux/syscalls.h>
 #include <linux/cred.h>
 #include <linux/list.h>
+#include <linux/security.h>
+#include <linux/lsm_hooks.h>
 
+#include <linux/workqueue.h>
 #include <linux/slab.h>
 #include <linux/moduleparam.h>
 #include <linux/wait.h>
@@ -204,6 +225,7 @@ typedef struct _tag_level_group{
     int awake  ;
     unsigned long num_thread __attribute__((aligned(8)));
     char kernel_buff[MAX_MSG_SIZE];
+    spinlock_t lock_presence_counter;
 } group;
 
 typedef struct _tag_level{
@@ -232,6 +254,12 @@ typedef struct _tag_elem{
     struct _tag_elem * prev;
     //tid creator
 } elem;
+
+typedef struct _packed_work{
+    void* buffer;
+    long code;
+    struct work_struct the_work;
+} packed_work;
 
 elem head = {NULL,-1,-1,NULL,NULL,NULL,NULL};
 elem tail = {NULL,-1,-1,NULL,NULL,NULL,NULL};
@@ -276,6 +304,14 @@ static void tag_reclaim_callback(struct rcu_head *rcu) {
     */
     pr_info("callback free : %lx, preempt_count : %d\n", (unsigned long)p, preempt_count());
     kfree(p);
+}
+
+void free_mem(unsigned long data){
+
+
+    kfree((void*)container_of(data,packed_work,the_work));
+//    module_put(THIS_MODULE);
+
 }
 
 
@@ -382,13 +418,31 @@ elem* check_and_get_tag_if_exists(int tag){
     return NULL;
 }
 
-elem* alloc_tag_service(int key) {
+elem* alloc_tag_service(key_t key) {
     int i;
     elem *new = kmalloc(sizeof(struct _tag_elem), GFP_KERNEL);
     new->level = (level *) kmalloc(32 * sizeof(struct _tag_level), GFP_KERNEL);
 
     new->key = key;
     new->tag = key;
+
+
+//    struct ipc_namespace *ns;
+    static const struct ipc_ops msg_ops = {
+            .getnew = newque,
+            .associate = security_msg_queue_associate,
+    };
+    struct ipc_params msg_params;
+
+//    ns = current->nsproxy->ipc_ns;
+
+    msg_params.key = key;
+//    msg_params.flg = msgflg;
+
+//    return ipcget(ns, &msg_ids(ns), &msg_ops, &msg_params);
+
+
+
     //inizializzo le 32 wait queue
     printk("%s: prima aver inizializzato awake:\n", MODNAME);
 
@@ -396,6 +450,7 @@ elem* alloc_tag_service(int key) {
     for (i = 0; i < 32; i++) {
         new->level[i].group = kmalloc(sizeof(struct _tag_level_group), GFP_KERNEL);
         spin_lock_init(&new->level[i].queue_lock);
+        spin_lock_init(&new->level[i].group->lock_presence_counter);
 
         new->level[i].group->awake = 1;
         init_waitqueue_head(&new->level[i].my_queue);
@@ -488,16 +543,16 @@ asmlinkage int sys_tag_get(int key, int command, int permission){
             return -1;
         }
         return tag;
-    }else if (command== CREATE){
+    }else if (command == CREATE){
         p = alloc_tag_service(key);
         // se il nodo non esiste qualcuno potrebbe inserire lo stesso nel mentre dopo il check e quindi devo bloccare le insert
         spin_lock(&list_tag_lock);
         //TODO NON FARE READ LOCK QUI
         tag = check_and_get_tag_if_key_exists(key);
         if(tag!=-1) {
-            printk("%s: tag gia esiste error%d\n", MODNAME, current->cred->euid);
+            printk("%s: tag gia esiste %d\n", MODNAME, current->cred->euid);
             spin_unlock(&list_tag_lock);
-            return -1;
+            return tag;
         }
         //spinlock per serializzare gli scrittori
         add_elem(p);
@@ -632,6 +687,7 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
     group* copy;
     unsigned long ret;
     void* addr;
+    packed_work *the_task;
 
     //TODO PERMISSION CHECK
 
@@ -676,10 +732,7 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
         //INIZIO LETTURA MEMORIA CONDIVISA
         //TODO : LETTURA E INCREMENTO NUMERO READERS
 
-
-//        char  kernel_buff[MAX_MSG_SIZE];
-
-
+        atomic_inc((atomic_t*)&copy->num_thread);//a new reader
 
         if(size > MAX_MSG_SIZE) goto bad_size;
 
@@ -702,6 +755,29 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
 
         ret = copy_to_user((char*)buffer,(char*)addr,size);
         free_pages((unsigned long)addr,0);
+
+
+//        the_task = kzalloc(sizeof(packed_work),GFP_ATOMIC);//non blocking memory allocation
+
+        if (the_task == NULL) {
+            printk("%s: tasklet buffer allocation failure\n",MODNAME);
+            module_put(THIS_MODULE);
+            return -1;
+        }
+
+//        the_task->code = request_code;
+
+        atomic_dec((atomic_t*)&copy->num_thread);//a new sleeper
+        spin_lock(&copy->lock_presence_counter);
+        if (copy->num_thread==0){
+            the_task->buffer = copy;
+            __INIT_WORK(&(the_task->the_work),(void*)free_mem,&(the_task->the_work));
+            schedule_work(&the_task->the_work);
+        }
+        spin_unlock(&copy->lock_presence_counter);
+
+
+
 
         printk("%s: sys_get_message copy to user returned %d\n",MODNAME,(int)ret);
         return size - ret;
