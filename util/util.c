@@ -59,7 +59,7 @@
 #include <linux/rwsem.h>
 #include <linux/memory.h>
 #include <linux/ipc_namespace.h>
-#include "my_newque.h"
+#include "../include/my_newque.h"
 
 #include <asm/unistd.h>
 
@@ -69,7 +69,6 @@
 struct ipc_proc_iface {
 	const char *path;
 	const char *header;
-	int ids;
 	int (*show)(struct seq_file *, void *);
 };
 
@@ -100,7 +99,7 @@ static const struct rhashtable_params ipc_kht_params = {
  * Set up the sequence range to use for the ipc identifier range (limited
  * below IPCMNI) then initialise the keys hashtable and ids idr.
  */
-int ipc_init_ids(struct ipc_ids *ids)
+int ipc_init_ids(void)
 {
 	int err;
 	ids->in_use = 0;
@@ -118,6 +117,37 @@ int ipc_init_ids(struct ipc_ids *ids)
 	return 0;
 }
 
+
+#ifdef CONFIG_PROC_FS
+static const struct file_operations sysvipc_proc_fops;
+/**
+ * ipc_init_proc_interface -  create a proc interface for sysipc types using a seq_file interface.
+ * @path: Path in procfs
+ * @header: Banner to be printed at the beginning of the file.
+ * @ids: ipc id table to iterate.
+ * @show: show routine.
+ */
+void ipc_init_proc_interface(const char *path, const char *header, int (*show)(struct seq_file *, void *))
+{
+	struct proc_dir_entry *pde;
+	struct ipc_proc_iface *iface;
+
+	iface = kmalloc(sizeof(*iface), GFP_KERNEL);
+	if (!iface)
+		return;
+	iface->path	= path;
+	iface->header	= header;
+	iface->show	= show;
+
+	pde = proc_create_data(path,
+			       S_IRUGO,        /* world readable */
+			       NULL,           /* parent dir */
+			       &sysvipc_proc_fops,
+			       iface);
+	if (!pde)
+		kfree(iface);
+}
+#endif
 
 
 /**
@@ -200,7 +230,7 @@ static inline int ipc_buildid(int id, struct ipc_ids *ids,
  *
  * Called with writer ipc_ids.rwsem held.
  */
-int ipc_addid(struct ipc_ids *ids, struct kern_ipc_perm *new, int limit)
+int ipc_addid( struct kern_ipc_perm *new, int limit)
 {
 	kuid_t euid;
 	kgid_t egid;
@@ -265,7 +295,7 @@ static int ipcget_new( struct ipc_ids *ids, struct ipc_params *params)
 	int err;
 
 	down_write(&ids->rwsem);
-	err = my_newque(ids, params);
+	err = my_newque(params);
 	up_write(&ids->rwsem);
 	return err;
 }
@@ -322,7 +352,7 @@ static int ipcget_public(struct ipc_ids * ids, struct ipc_params * params)
             if (!(flg & IPC_CREAT))
                 err = -ENOENT;
             else
-                err = my_newque(ids, params);
+                err = my_newque( params);
         } else {
             printk("id perm : %d  \n",ipcp->id);
             // ipc object has been locked by ipc_findkey()
@@ -666,7 +696,7 @@ int ipc_parse_version(int *cmd)
 
 #ifdef CONFIG_PROC_FS
 struct ipc_proc_iter {
-	struct ipc_namespace *ns;
+	struct ipc_ids *ids;
 	struct ipc_proc_iface *iface;
 };
 
@@ -713,7 +743,7 @@ static void *sysvipc_proc_next(struct seq_file *s, void *it, loff_t *pos)
 	if (ipc && ipc != SEQ_START_TOKEN)
 		ipc_unlock(ipc);
 
-	return sysvipc_find_ipc(&iter->ns->ids[iface->ids], *pos, pos);
+	return sysvipc_find_ipc(iter->ids, *pos, pos);
 }
 
 /*
@@ -724,9 +754,9 @@ static void *sysvipc_proc_start(struct seq_file *s, loff_t *pos)
 {
 	struct ipc_proc_iter *iter = s->private;
 	struct ipc_proc_iface *iface = iter->iface;
-	struct ipc_ids *ids;
+	//struct ipc_ids *ids;
 
-	ids = &iter->ns->ids[iface->ids];
+	ids = iter->ids;
 
 	/*
 	 * Take the lock - this will be released by the corresponding
@@ -751,13 +781,13 @@ static void sysvipc_proc_stop(struct seq_file *s, void *it)
 	struct kern_ipc_perm *ipc = it;
 	struct ipc_proc_iter *iter = s->private;
 	struct ipc_proc_iface *iface = iter->iface;
-	struct ipc_ids *ids;
+//	struct ipc_ids *ids;
 
 	/* If we had a locked structure, release it */
 	if (ipc && ipc != SEQ_START_TOKEN)
 		ipc_unlock(ipc);
 
-	ids = &iter->ns->ids[iface->ids];
+	ids = iter->ids;
 	/* Release the lock we took in start() */
 	up_read(&ids->rwsem);
 }
@@ -791,7 +821,7 @@ static int sysvipc_proc_open(struct inode *inode, struct file *file)
 		return -ENOMEM;
 
 	iter->iface = PDE_DATA(inode);
-	iter->ns    = get_ipc_ns(current->nsproxy->ipc_ns);
+	iter->ids    = ids;
 
 	return 0;
 }
@@ -800,7 +830,8 @@ static int sysvipc_proc_release(struct inode *inode, struct file *file)
 {
 	struct seq_file *seq = file->private_data;
 	struct ipc_proc_iter *iter = seq->private;
-	put_ipc_ns(iter->ns);
+	//put_ipc_ns(iter->ns);
+	//iter->ids;
 	return seq_release_private(inode, file);
 }
 

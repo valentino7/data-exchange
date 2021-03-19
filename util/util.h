@@ -65,20 +65,26 @@ struct ipc_params {
 
 
 struct seq_file;
-struct ipc_ids;
 
-int ipc_init_ids(struct ipc_ids *);
+int ipc_init_ids(void);
+#ifdef CONFIG_PROC_FS
+void ipc_init_proc_interface(const char *path, const char *header, int (*show)(struct seq_file *, void *));
+#else
+#define ipc_init_proc_interface(path, header, show) do {} while (0)
+#endif
 
-#define IPC_SEM_IDS	0
-#define IPC_MSG_IDS	1
-#define IPC_SHM_IDS	2
+//void ipc_init_proc_interface(const char *path, const char *header, int ids, int (*show)(struct seq_file *, void *));
+static int sysvipc_proc_show(struct seq_file *s , void * it);
+void ipc_init(void);
+
+
 
 #define ipcid_to_idx(id) ((id) % SEQ_MULTIPLIER)
 #define ipcid_to_seqx(id) ((id) / SEQ_MULTIPLIER)
 #define IPCID_SEQ_MAX min_t(int, INT_MAX/SEQ_MULTIPLIER, USHRT_MAX)
 
 /* must be called with ids->rwsem acquired for writing */
-int ipc_addid(struct ipc_ids *, struct kern_ipc_perm *, int);
+int ipc_addid(struct kern_ipc_perm *, int);
 
 /* must be called with both locks acquired. */
 void ipc_rmid(struct ipc_ids *, struct kern_ipc_perm *);

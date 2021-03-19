@@ -22,7 +22,6 @@
 #define EXPORT_SYMTAB
 #define REMOVE 0
 #define AWAKE_ALL 1
-#define MAX_MSG_SIZE 4096
 #define RESTRICT 0
 #define NO_RESTRICT 1
 #define CREATE 0
@@ -80,8 +79,8 @@
 #include <linux/wait.h>
 #include <linux/spinlock.h>
 #include <linux/msg.h>
-#include "util.h"
-#include "my_newque.h"
+#include "./util/util.h"
+#include "./include/my_newque.h"
 //#include "./include/vtpmo.h"
 
 
@@ -224,42 +223,6 @@ unsigned long new_sys_call_array[] = {(unsigned long)sys_tag_get,(unsigned long)
 //unsigned long count __attribute__((aligned(8)));//this is used to audit how many threads are still sleeping onto the sleep/wakeup queue
 //module_param(count,ulong,0660);
 
-typedef struct _tag_level_group{
-    int awake  ;
-    unsigned long num_thread __attribute__((aligned(8)));
-    char kernel_buff[MAX_MSG_SIZE];
-    spinlock_t lock_presence_counter;
-} group;
-
-typedef struct _tag_level{
-    int level_awake  ;
-    unsigned long num_thread __attribute__((aligned(8)));
-    wait_queue_head_t my_queue;
-    struct _tag_level_group* group;
-    spinlock_t queue_lock;
-} level;
-
-//almeno 256 servizi runnabili
-typedef struct _tag_elem{
-    struct kern_ipc_perm q_perm;
-
-    struct _tag_level* level;
-    int tag;
-    int key;
-
-    spinlock_t tag_lock;
-
-    int num_thread_per_tag __attribute__((aligned(8)));
-
-
-    struct list_head node;
-    struct rcu_head rcu;
-
-    struct _tag_elem * next;
-    struct _tag_elem * prev;
-    //tid creator
-} elem;
-
 
 
 
@@ -269,13 +232,13 @@ typedef struct _packed_work{
     struct work_struct the_work;
 } packed_work;
 
-elem head = {NULL,-1,-1,NULL,NULL,NULL,NULL};
-elem tail = {NULL,-1,-1,NULL,NULL,NULL,NULL};
+//elem head = {NULL,-1,-1,NULL,NULL,NULL,NULL};
+//elem tail = {NULL,-1,-1,NULL,NULL,NULL,NULL};
 
 //lista RCU
 static LIST_HEAD(list_tag_rcu);
 static spinlock_t list_tag_lock;
-struct ipc_ids ids;
+
 
 
 
@@ -380,8 +343,8 @@ void add_elem(elem* p) {
     list_add_rcu(&p->node, &list_tag_rcu);
 }
 
-elem* check_and_get_tag_if_exists(int tag){
-    struct kern_ipc_perm *ipcp = ipc_obtain_object_idr(&msg_ids(ns), id);
+elem* check_and_get_tag_if_exists(int id){
+    struct kern_ipc_perm *ipcp = ipc_obtain_object_idr(ids, id);
 
     if (IS_ERR(ipcp))
         return ERR_CAST(ipcp);
@@ -389,32 +352,22 @@ elem* check_and_get_tag_if_exists(int tag){
     return container_of(ipcp, elem, q_perm);
 }
 
-elem* alloc_tag_service(key_t key) {
-    int i;
-    elem *new = kmalloc(sizeof(struct _tag_elem), GFP_KERNEL);
-    new->level = (level *) kmalloc(32 * sizeof(struct _tag_level), GFP_KERNEL);
+#ifdef CONFIG_PROC_FS
+static int sysvipc_msg_proc_show(struct seq_file *s, void *it)
+{
+	struct user_namespace *user_ns = seq_user_ns(s);
+	struct kern_ipc_perm *ipcp = it;
+	elem *msq = container_of(ipcp, elem, q_perm);
 
-    new->key = key;
-    new->tag = key;
+	seq_printf(s,
+		   "%10d %10d  \n",
+		   msq->q_perm.key,
+		   msq->q_perm.id
+		 );
 
-
-
-    //inizializzo le 32 wait queue
-    printk("%s: prima aver inizializzato awake:\n", MODNAME);
-
-    spin_lock_init(&new->tag_lock);
-    for (i = 0; i < 32; i++) {
-        new->level[i].group = kmalloc(sizeof(struct _tag_level_group), GFP_KERNEL);
-        spin_lock_init(&new->level[i].queue_lock);
-        spin_lock_init(&new->level[i].group->lock_presence_counter);
-
-        new->level[i].group->awake = 1;
-        init_waitqueue_head(&new->level[i].my_queue);
-
-    }
-    printk("%s: dpo aver inizializzato awake: %d \n", MODNAME, new->level[3].group->awake);
-    return new;
+	return 0;
 }
+#endif
 
 /*void free_list(void)
 {
@@ -489,7 +442,7 @@ asmlinkage int sys_tag_get(int key, int command, int permission){
     struct ipc_params params;
     params.key=key;
     params.flg=command;
-    result = ipcget(&ids, &params);
+    result = ipcget(ids, &params);
     printk("risultato id %d \n ", result);
     return result;
 
@@ -771,7 +724,7 @@ asmlinkage int sys_tag_cmd(int tag, int command){
     //TODO PERMISSION CHECK
     elem* p;
     rcu_read_lock();
-    p = check_and_get_tag_if_exists(tag);
+    p= check_and_get_tag_if_exists(tag);
     rcu_read_unlock();
 
     printk("%s: sono nel command %d %d\n", MODNAME, command, p->tag);
@@ -839,13 +792,12 @@ int init_module(void) {
 	
 	int i,j;
 
-    ipc_init_ids(&ids);
+    ipc_init_ids();
 	printk("%s: initializing\n",MODNAME);
 
-	//TODO DA CANCELLARE
-    head.next = &tail;// setup initial double linked list
-    tail.prev = &head;
 
+    ipc_init_proc_interface("sysvipc/msg",
+                            "       key      msqid \n", sysvipc_msg_proc_show);
     spin_lock_init(&list_tag_lock);
 
 

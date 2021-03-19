@@ -29,8 +29,8 @@
 
 #include <asm/current.h>
 #include <linux/uaccess.h>
-#include "util.h"
-#include "my_newque.h"
+#include "../util/util.h"
+#include "../include/my_newque.h"
 #include <linux/rcupdate.h>
 
 
@@ -42,21 +42,43 @@ static void msg_rcu_free(struct rcu_head *head)
 	kvfree(msq);
 }
 
+elem* alloc_and_fill_tag_service(void) {
+    int i;
+    elem *new = kmalloc(sizeof(struct _tag_elem), GFP_KERNEL);
+    new->level = (level *) kmalloc(32 * sizeof(struct _tag_level), GFP_KERNEL);
 
-int my_newque(struct ipc_ids *ids, struct ipc_params * params){
+    //inizializzo le 32 wait queue
+    printk(" prima aver inizializzato awake:\n" );
+
+    spin_lock_init(&new->tag_lock);
+    for (i = 0; i < 32; i++) {
+        new->level[i].group = kmalloc(sizeof(struct _tag_level_group), GFP_KERNEL);
+        spin_lock_init(&new->level[i].queue_lock);
+        spin_lock_init(&new->level[i].group->lock_presence_counter);
+
+        new->level[i].group->awake = 1;
+        init_waitqueue_head(&new->level[i].my_queue);
+
+    }
+    printk(" dpo aver inizializzato awake: %d \n", new->level[3].group->awake);
+    return new;
+}
+
+int my_newque(struct ipc_params * params){
 
 	printk("ENTRATO 1 : \n");
 	int retval;
-	struct msg_queue *msq;
+	elem *msq;
 
-	msq = kvmalloc(sizeof(*msq), GFP_KERNEL);
+	//msq = kvmalloc(sizeof(*msq), GFP_KERNEL);
+    msq= alloc_and_fill_tag_service();
 	if (unlikely(!msq))
 		return -ENOMEM;
 
 	msq->q_perm.mode = params->flg;
 	msq->q_perm.key = params->key;
 
-	retval = ipc_addid(ids, &msq->q_perm, 5);
+	retval = ipc_addid( &msq->q_perm, 5);
 
 	printk("valore funzione 1 : %d %d \n",msq->q_perm.id, params->key);
 	if (retval < 0) {
