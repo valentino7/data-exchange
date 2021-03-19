@@ -79,6 +79,9 @@
 #include <linux/moduleparam.h>
 #include <linux/wait.h>
 #include <linux/spinlock.h>
+#include <linux/msg.h>
+#include "util.h"
+#include "my_newque.h"
 //#include "./include/vtpmo.h"
 
 
@@ -238,6 +241,8 @@ typedef struct _tag_level{
 
 //almeno 256 servizi runnabili
 typedef struct _tag_elem{
+    struct kern_ipc_perm q_perm;
+
     struct _tag_level* level;
     int tag;
     int key;
@@ -255,6 +260,9 @@ typedef struct _tag_elem{
     //tid creator
 } elem;
 
+
+
+
 typedef struct _packed_work{
     void* buffer;
     long code;
@@ -267,31 +275,10 @@ elem tail = {NULL,-1,-1,NULL,NULL,NULL,NULL};
 //lista RCU
 static LIST_HEAD(list_tag_rcu);
 static spinlock_t list_tag_lock;
+struct ipc_ids ids;
 
 
-//funzione test da togliere
-void printList(void){
-    struct _tag_elem *p;
-    printk("%s: inizio print list  \n",MODNAME);
 
-    for (p=&head; p!= NULL && p->next!=NULL;  p=p->next){
-        printk("%s: PRINT LIST: %d  \n",MODNAME,p->tag);
-    }
-    printk("%s: fine print list  \n",MODNAME);
-
-}
-
-void print_list_tag(int tag){
-    struct _tag_elem *p;
-    for (p=&head; p!= NULL && p->next!=NULL;  p=p->next){
-        if (p->tag == tag){
-            printk("%s: STAMPO ER TAG NELLA RECEIVE: %d  \n",MODNAME,p->tag);
-//            printk("%s: tag: %d  \n",MODNAME,p->level[0].awake);
-//            printk("%s: tag: %d  \n",MODNAME,tag);
-            return;
-        }
-    }
-}
 
 static void tag_reclaim_callback(struct rcu_head *rcu) {
     elem *p = container_of(rcu, elem, rcu);
@@ -308,8 +295,8 @@ static void tag_reclaim_callback(struct rcu_head *rcu) {
 
 void free_mem(unsigned long data){
 
-
-    kfree((void*)container_of(data,packed_work,the_work));
+    printk("free mem da implementare");
+//    kfree((void*)container_of(data,packed_work,the_work));
 //    module_put(THIS_MODULE);
 
 }
@@ -348,13 +335,6 @@ int remove_tag(elem* p, int tag){
 
 
 
-
-    //lockare
-//    p->prev->next=p->next;
-//    p->next->prev=p->prev;
-//    kfree(p);
-//
-//    printList();
     return 1;
 }
 
@@ -401,21 +381,12 @@ void add_elem(elem* p) {
 }
 
 elem* check_and_get_tag_if_exists(int tag){
-//    elem *p;
-//    for (p=&head; p!= NULL && p->next!=NULL;  p=p->next){
-//        if (p->tag == tag){
-//            return p;
-//        }
-//    }
-    elem *p;
-    //pointer da usare nel loop, head, member
-    list_for_each_entry(p, &list_tag_rcu, node) {
-        if(p->tag == tag) {
-            return p;
-        }
-    }
+    struct kern_ipc_perm *ipcp = ipc_obtain_object_idr(&msg_ids(ns), id);
 
-    return NULL;
+    if (IS_ERR(ipcp))
+        return ERR_CAST(ipcp);
+
+    return container_of(ipcp, elem, q_perm);
 }
 
 elem* alloc_tag_service(key_t key) {
@@ -425,21 +396,6 @@ elem* alloc_tag_service(key_t key) {
 
     new->key = key;
     new->tag = key;
-
-
-//    struct ipc_namespace *ns;
-    static const struct ipc_ops msg_ops = {
-            .getnew = newque,
-            .associate = security_msg_queue_associate,
-    };
-    struct ipc_params msg_params;
-
-//    ns = current->nsproxy->ipc_ns;
-
-    msg_params.key = key;
-//    msg_params.flg = msgflg;
-
-//    return ipcget(ns, &msg_ids(ns), &msg_ops, &msg_params);
 
 
 
@@ -460,7 +416,7 @@ elem* alloc_tag_service(key_t key) {
     return new;
 }
 
-void free_list(void)
+/*void free_list(void)
 {
     int i;
     struct list_head *p,*node;
@@ -471,11 +427,11 @@ void free_list(void)
         tmp_elem = list_entry(p, elem, node);
         list_del(p);
         for (i = 0; i < 32; i++) {
-          kfree(tmp_elem->level[i].group);
+            kfree(tmp_elem->level[i].group);
         }
         kfree(tmp_elem->level);
         kfree(tmp_elem);
-    }
+    }*/
 
 
 //    elem *n = head.next;
@@ -506,7 +462,7 @@ void free_list(void)
 //
 //    }
 //    printk("%s:LIBERO MEMORIA\n", MODNAME);
-}
+//}
 
 
 
@@ -518,8 +474,27 @@ __SYSCALL_DEFINEx(3, _tag_get, int, key, int, command, int, permission){
 #else
 asmlinkage int sys_tag_get(int key, int command, int permission){
 #endif
+    int result;
+    if (permission != RESTRICT && permission != NO_RESTRICT ){
+        printk("%s: permission non valido %d\n",MODNAME,current->cred->euid);
+        return -1;
+    }
 
-    int tag;
+
+
+//controllare se restrict
+//check se non è ne open ne esclusive
+//TODO valore di ritorno -1
+//todo allocare messaggio
+    struct ipc_params params;
+    params.key=key;
+    params.flg=command;
+    result = ipcget(&ids, &params);
+    printk("risultato id %d \n ", result);
+    return result;
+
+
+ /*   int tag;
     elem* p;
 
     printk("%s: tag-params sys-call has been called %d %d %d  \n",MODNAME,key,command,permission);
@@ -531,11 +506,7 @@ asmlinkage int sys_tag_get(int key, int command, int permission){
         return -1;
     }
 
-    //check if key==ipc private
-//    if (key!=IPC_PRIVATE || key){
-//        tag=max_tag+1;
-//        max-tag;
-//    }
+
     if(command == OPEN){
         tag = check_and_get_tag_if_key_exists(key);
         if (tag==-1) {
@@ -564,28 +535,8 @@ asmlinkage int sys_tag_get(int key, int command, int permission){
         printk("%s: command non valido %d\n",MODNAME,current->cred->euid);
         return -1;
     }
+*/
 
-    //lock read
-//    tag = check_and_get_if_key_exists(key);
-//    if (tag==-1) {
-        //se non esiste aggiungo nodo
-    //unlock read
-//        if(command == OPEN){
-//            printk("%s: tag già aperto error%d\n",MODNAME,current->cred->euid);
-//            return -1;
-//        }
-        //spinlock per serializzare gli scrittori
-//        add_elem(key);
-        //rilascio lock
-//        printList();
-//        return key;
-//    }else{
-        //se esiste ritorno il nodo esistente
-//        if(command == CREATE){
-//            printk("%s: tag non esiste error%d\n",MODNAME,current->cred->euid);
-//            return -1;
-//        }
-//        return tag;
 
     //caso di errore
     return -1;
@@ -624,6 +575,8 @@ asmlinkage int sys_tag_send(int tag, int level, char* buffer, size_t size){
     ret = copy_from_user((char *) addr, (char *) buffer, size);//returns the number of bytes NOT copied
 
     rcu_read_lock();
+
+    //TODO GET TAG FROM IPC STRUCT
     p= check_and_get_tag_if_exists(tag);
     if(p!=NULL) {
         //INIZIO LAVORO PER SVEGLIARE I THREAD
@@ -694,6 +647,8 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
     //serve read lock perchè se dealloco la struttura p, non posso piu accedere alla variabile lock
     rcu_read_lock();
     //sezione critica condivisa con remover con contatore atomico per tag di accessi
+
+    //TODO GET AND VEERIFY IF TAG EXISTS
     p= check_and_get_tag_if_exists(tag);
     spin_lock(&p->tag_lock);
     //check se contator è -1
@@ -883,7 +838,8 @@ unprotect_memory(void)
 int init_module(void) {
 	
 	int i,j;
-		
+
+    ipc_init_ids(&ids);
 	printk("%s: initializing\n",MODNAME);
 
 	//TODO DA CANCELLARE

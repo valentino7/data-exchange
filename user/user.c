@@ -5,6 +5,7 @@
 #include <string.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <sys/msg.h>
 
 #define TAG_GET 134
 #define TAG_SEND 174
@@ -17,6 +18,7 @@
 #define NO_RESTRICT 1
 
 
+//command: IPC_CREAT oppure IPC_EXCL
 int sys_tag_get(int key, int command, int permission){
     return syscall(TAG_GET, key, command, permission);
 }
@@ -45,7 +47,18 @@ int main(int argc, char** argv){
 //    }
 //    printf("get uid %d \n", getuid ());
 
-    sys_tag_get(8, 0,RESTRICT);
+//    int tag = sys_tag_get(9, IPC_CREAT  , RESTRICT);
+//    printf("tag: %d \n", tag);
+//
+//    tag = sys_tag_get(9, IPC_EXCL , RESTRICT);
+//    printf("tag: %d \n", tag);
+//
+//    tag = sys_tag_get(9, IPC_CREAT | IPC_EXCL  , RESTRICT);
+//    printf("tag: %d \n", tag);
+
+    tag = sys_tag_get(10, IPC_EXCL | 34242, RESTRICT);
+    printf("tag: %d \n", tag);
+
 //    sys_tag_get(9, 3,RESTRICT);
 //    sys_tag_send(8, 3, "ciao", 4);
 //
@@ -55,6 +68,6 @@ int main(int argc, char** argv){
 
 //    sys_tag_cmd(8, REMOVE);
 
-    return;
+    return 0;
 
 }
