@@ -56,17 +56,20 @@ int main(int argc, char** argv){
 //    tag = sys_tag_get(9, IPC_CREAT | IPC_EXCL  , RESTRICT);
 //    printf("tag: %d \n", tag);
 
-    tag = sys_tag_get(10, IPC_EXCL | 34242, RESTRICT);
+    int tag = sys_tag_get(24, IPC_CREAT, RESTRICT);
     printf("tag: %d \n", tag);
+
+    //un thread receiver 0 va a dormire mentre l'altro elimina
 
 //    sys_tag_get(9, 3,RESTRICT);
 //    sys_tag_send(8, 3, "ciao", 4);
 //
-//    char* buffer = malloc(4);
-//    sys_tag_receive(8, 3, buffer, 4);
+    char* buffer = malloc(4);
+    int num = sys_tag_receive(tag, 3, buffer, 4);
+    printf("numero %d \n", num);
 //    sys_tag_send(8, 3, "ciao", 4);
 
-//    sys_tag_cmd(8, REMOVE);
+//    printf("rimozione %d \n", sys_tag_cmd(tag, REMOVE));
 
     return 0;
 

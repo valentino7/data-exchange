@@ -880,8 +880,7 @@ deps_/home/valentino/CLionProjects/data-exchange/./util/util.o := \
     $(wildcard include/config/ipc/ns.h) \
     $(wildcard include/config/posix/mqueue/sysctl.h) \
   include/linux/ns_common.h \
-  /home/valentino/CLionProjects/data-exchange/./util/../include/my_newque.h \
-  /home/valentino/CLionProjects/data-exchange/./util/../include/../util/util.h \
+  /home/valentino/CLionProjects/data-exchange/./util/util.h \
     $(wildcard include/config/arch/want/compat/ipc/parse/version.h) \
   include/linux/compat.h \
     $(wildcard include/config/compat/old/sigaction.h) \
@@ -905,7 +904,6 @@ deps_/home/valentino/CLionProjects/data-exchange/./util/util.o := \
     $(wildcard include/config/debug/stack/usage.h) \
   include/uapi/linux/magic.h \
   arch/x86/include/asm/user32.h \
-  /home/valentino/CLionProjects/data-exchange/./util/util.h \
 
 /home/valentino/CLionProjects/data-exchange/./util/util.o: $(deps_/home/valentino/CLionProjects/data-exchange/./util/util.o)
 

@@ -14,6 +14,7 @@
 #include <linux/unistd.h>
 #include <linux/err.h>
 #include <linux/ipc_namespace.h>
+#include <linux/ipc.h>
 
 #define SEQ_MULTIPLIER	(IPCMNI)
 
@@ -21,7 +22,6 @@ int sem_init(void);
 int msg_init(void);
 void shm_init(void);
 
-struct ipc_namespace;
 
 #ifdef CONFIG_POSIX_MQUEUE
 extern void mq_clear_sbinfo(struct ipc_namespace *ns);
@@ -61,6 +61,48 @@ struct ipc_params {
 		int nsems;	/* for semaphores */
 	} u;			/* holds the getnew() specific param */
 };
+#define MAX_MSG_SIZE 4096
+struct _tag_level_group{
+    int awake  ;
+    unsigned long num_thread __attribute__((aligned(8)));
+    char kernel_buff[MAX_MSG_SIZE];
+    spinlock_t lock_presence_counter;
+};
+
+struct _tag_level{
+    int level_awake  ;
+    unsigned long num_thread __attribute__((aligned(8)));
+    wait_queue_head_t my_queue;
+    struct _tag_level_group* group;
+    spinlock_t queue_lock;
+};
+
+//almeno 256 servizi runnabili
+typedef struct _tag_elem{
+    struct kern_ipc_perm q_perm;
+
+    struct _tag_level* level;
+    int tag;
+    int key;
+
+    //lock per rimuovere in manierea sicura
+//    spinlock_t tag_lock;
+    //contatore accessi
+    int num_thread_per_tag __attribute__((aligned(8)));
+
+
+    struct list_head node;
+    struct rcu_head rcu;
+
+    struct _tag_elem * next;
+    struct _tag_elem * prev;
+    //tid creator
+} msg_queue;
+
+extern struct ipc_ids *ids;
+
+int my_newque(struct ipc_params * params);
+
 
 
 
@@ -88,10 +130,10 @@ void ipc_init(void);
 int ipc_addid(struct kern_ipc_perm *, int);
 
 /* must be called with both locks acquired. */
-void ipc_rmid(struct ipc_ids *, struct kern_ipc_perm *);
+void ipc_rmid( struct kern_ipc_perm *);
 
 /* must be called with both locks acquired. */
-void ipc_set_key_private(struct ipc_ids *, struct kern_ipc_perm *);
+void ipc_set_key_private( struct kern_ipc_perm *);
 
 /* must be called with ipcp locked */
 int ipcperms(struct ipc_namespace *ns, struct kern_ipc_perm *ipcp, short flg);
@@ -126,15 +168,13 @@ int ipc_rcu_getref(struct kern_ipc_perm *ptr);
 void ipc_rcu_putref(struct kern_ipc_perm *ptr,
 			void (*func)(struct rcu_head *head));
 
-struct kern_ipc_perm *ipc_lock(struct ipc_ids *, int);
-struct kern_ipc_perm *ipc_obtain_object_idr(struct ipc_ids *ids, int id);
+struct kern_ipc_perm *ipc_lock(int);
+struct kern_ipc_perm *ipc_obtain_object_idr(int id);
 
 void kernel_to_ipc64_perm(struct kern_ipc_perm *in, struct ipc64_perm *out);
 void ipc64_perm_to_ipc_perm(struct ipc64_perm *in, struct ipc_perm *out);
 int ipc_update_perm(struct ipc64_perm *in, struct kern_ipc_perm *out);
-struct kern_ipc_perm *ipcctl_pre_down_nolock(struct ipc_namespace *ns,
-					     struct ipc_ids *ids, int id, int cmd,
-					     struct ipc64_perm *perm, int extra_perm);
+struct kern_ipc_perm *ipcctl_pre_down_nolock( int id);
 
 #ifndef CONFIG_ARCH_WANT_IPC_PARSE_VERSION
 /* On IA-64, we always use the "64-bit version" of the IPC structures.  */
@@ -143,10 +183,10 @@ struct kern_ipc_perm *ipcctl_pre_down_nolock(struct ipc_namespace *ns,
 int ipc_parse_version(int *cmd);
 #endif
 
-extern void free_msg(struct msg_msg *msg);
+/*extern void free_msg(struct msg_msg *msg);
 extern struct msg_msg *load_msg(const void __user *src, size_t len);
 extern struct msg_msg *copy_msg(struct msg_msg *src, struct msg_msg *dst);
-extern int store_msg(void __user *dest, struct msg_msg *msg, size_t len);
+extern int store_msg(void __user *dest, struct msg_msg *msg, size_t len);*/
 
 static inline int ipc_checkid(struct kern_ipc_perm *ipcp, int uid)
 {
@@ -187,9 +227,9 @@ static inline bool ipc_valid_object(struct kern_ipc_perm *perm)
 	return !perm->deleted;
 }
 
-struct kern_ipc_perm *ipc_obtain_object_check(struct ipc_ids *ids, int id);
-int ipcget( struct ipc_ids *ids, struct ipc_params *params);
-void free_ipcs(struct ipc_namespace *ns, struct ipc_ids *ids,
+struct kern_ipc_perm *ipc_obtain_object_check(int id);
+int ipcget(  struct ipc_params *params);
+void free_ipcs(struct ipc_namespace *ns,
 		void (*free)(struct ipc_namespace *, struct kern_ipc_perm *));
 
 #ifdef CONFIG_COMPAT

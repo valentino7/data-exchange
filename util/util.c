@@ -59,11 +59,12 @@
 #include <linux/rwsem.h>
 #include <linux/memory.h>
 #include <linux/ipc_namespace.h>
-#include "../include/my_newque.h"
+#include <linux/idr.h>
+#include "util.h"
 
 #include <asm/unistd.h>
 
-#include "util.h"
+extern struct ipc_ids *ids;
 
 
 struct ipc_proc_iface {
@@ -102,6 +103,8 @@ static const struct rhashtable_params ipc_kht_params = {
 int ipc_init_ids(void)
 {
 	int err;
+
+    ids = kmalloc(sizeof(struct ipc_ids), GFP_KERNEL);
 	ids->in_use = 0;
 	ids->seq = 0;
 	init_rwsem(&ids->rwsem);
@@ -160,7 +163,7 @@ void ipc_init_proc_interface(const char *path, const char *header, int (*show)(s
  *
  * Called with writer ipc_ids.rwsem held.
  */
-static struct kern_ipc_perm *ipc_findkey(struct ipc_ids *ids, key_t key)
+static struct kern_ipc_perm *ipc_findkey( key_t key)
 {
 	struct kern_ipc_perm *ipcp = NULL;
 
@@ -181,12 +184,12 @@ static struct kern_ipc_perm *ipc_findkey(struct ipc_ids *ids, key_t key)
 /*
  * Specify desired id for next allocated IPC object.
  */
-#define ipc_idr_alloc(ids, new)						\
+#define ipc_idr_alloc( new)						\
 	idr_alloc(&(ids)->ipcs_idr, (new),				\
 		  (ids)->next_id < 0 ? 0 : ipcid_to_idx((ids)->next_id),\
 		  0, GFP_NOWAIT)
 
-static inline int ipc_buildid(int id, struct ipc_ids *ids,
+static inline int ipc_buildid(int id,
 			      struct kern_ipc_perm *new)
 {
 	if (ids->next_id < 0) { /* default, behave as !CHECKPOINT_RESTORE */
@@ -202,10 +205,10 @@ static inline int ipc_buildid(int id, struct ipc_ids *ids,
 }
 
 #else
-#define ipc_idr_alloc(ids, new)					\
+#define ipc_idr_alloc( new)					\
 	idr_alloc(&(ids)->ipcs_idr, (new), 0, 0, GFP_NOWAIT)
 
-static inline int ipc_buildid(int id, struct ipc_ids *ids,
+static inline int ipc_buildid(int id,
 			      struct kern_ipc_perm *new)
 {
 	new->seq = ids->seq++;
@@ -254,9 +257,9 @@ int ipc_addid( struct kern_ipc_perm *new, int limit)
 	new->cuid = new->uid = euid;
 	new->gid = new->cgid = egid;
 
-	id = ipc_idr_alloc(ids, new);
+	id = ipc_idr_alloc( new);
 	idr_preload_end();
-
+    printk("id numero 1 %d \n", id);
 	if (id >= 0 && new->key != IPC_PRIVATE) {
 		err = rhashtable_insert_fast(&ids->key_ht, &new->khtnode,
 					     ipc_kht_params);
@@ -275,9 +278,68 @@ int ipc_addid( struct kern_ipc_perm *new, int limit)
 	if (id > ids->max_id)
 		ids->max_id = id;
 
-	new->id = ipc_buildid(id, ids, new);
+	new->id = ipc_buildid(id, new);
+    printk("id numero 2 %d \n", new->id);
 
-	return id;
+    return id;
+}
+static void msg_rcu_free(struct rcu_head *head)
+{
+    struct kern_ipc_perm *p = container_of(head, struct kern_ipc_perm, rcu);
+    msg_queue *msq = container_of(p, msg_queue, q_perm);
+    kvfree(msq);
+}
+
+msg_queue* alloc_and_fill_tag_service(void) {
+    int i;
+    struct _tag_elem *new = kmalloc(sizeof(struct _tag_elem), GFP_KERNEL);
+    new->level = (struct _tag_level *) kmalloc(32 * sizeof(struct _tag_level), GFP_KERNEL);
+
+    //inizializzo le 32 wait queue
+    printk(" prima aver inizializzato awake:\n" );
+
+//    spin_lock_init(&new->tag_lock);
+    new->num_thread_per_tag=0;
+    for (i = 0; i < 32; i++) {
+        new->level[i].group = kmalloc(sizeof(struct _tag_level_group), GFP_KERNEL);
+        spin_lock_init(&new->level[i].queue_lock);
+        spin_lock_init(&new->level[i].group->lock_presence_counter);
+
+        new->level[i].group->awake = 1;
+        init_waitqueue_head(&new->level[i].my_queue);
+
+    }
+    printk(" dpo aver inizializzato awake: %d \n", new->level[3].group->awake);
+    return new;
+}
+
+int my_newque(struct ipc_params * params){
+
+    printk("ENTRATO 1 : \n");
+    int retval;
+    msg_queue *msq;
+
+    //msq = kvmalloc(sizeof(*msq), GFP_KERNEL);
+    msq= alloc_and_fill_tag_service();
+    if (unlikely(!msq))
+        return -ENOMEM;
+
+    msq->q_perm.mode = params->flg;
+    msq->q_perm.key = params->key;
+
+    retval = ipc_addid( &msq->q_perm, 5);
+
+    printk("valore funzione 1 : %d %d \n",msq->q_perm.id, params->key);
+    if (retval < 0) {
+        printk("errore IPC ADDID  \n");
+        call_rcu(&msq->q_perm.rcu, msg_rcu_free);
+        return retval;
+    }
+    ipc_unlock_object(&msq->q_perm);
+    //ipc_unlock_object(&msq->q_perm);
+    rcu_read_unlock();
+    return msq->q_perm.id;
+
 }
 
 /**
@@ -290,13 +352,18 @@ int ipc_addid( struct kern_ipc_perm *new, int limit)
  * This routine is called by sys_msgget, sys_semget() and sys_shmget()
  * when the key is IPC_PRIVATE.
  */
-static int ipcget_new( struct ipc_ids *ids, struct ipc_params *params)
+static int ipcget_new( struct ipc_params *params)
 {
-	int err;
+	int err = -1;
+    int flg = params->flg;
 
-	down_write(&ids->rwsem);
-	err = my_newque(params);
-	up_write(&ids->rwsem);
+    if(flg == (IPC_CREAT | IPC_EXCL) || flg == (IPC_CREAT) || flg == (IPC_EXCL) ){
+        down_write(&ids->rwsem);
+        err = my_newque(params);
+        up_write(&ids->rwsem);
+    }
+
+
 	return err;
 }
 
@@ -331,7 +398,7 @@ static int ipcget_new( struct ipc_ids *ids, struct ipc_params *params)
  *
  * On success, the ipc id is returned.
  */
-static int ipcget_public(struct ipc_ids * ids, struct ipc_params * params)
+static int ipcget_public(struct ipc_params * params)
 {
 	struct kern_ipc_perm *ipcp;
 	int flg = params->flg;
@@ -343,7 +410,7 @@ static int ipcget_public(struct ipc_ids * ids, struct ipc_params * params)
 	 */
 	err=-1;
 	down_write(&ids->rwsem);
-	ipcp = ipc_findkey(ids, params->key);
+	ipcp = ipc_findkey(params->key);
 
     if(flg == (IPC_CREAT | IPC_EXCL) || flg == (IPC_CREAT) || flg == (IPC_EXCL) ){
         if (ipcp == NULL) {
@@ -387,7 +454,7 @@ static int ipcget_public(struct ipc_ids * ids, struct ipc_params * params)
  * ipc_ids.rwsem (as a writer) and the spinlock for this ID are held
  * before this function is called, and remain locked on the exit.
  */
-static void ipc_kht_remove(struct ipc_ids *ids, struct kern_ipc_perm *ipcp)
+static void ipc_kht_remove( struct kern_ipc_perm *ipcp)
 {
 	if (ipcp->key != IPC_PRIVATE)
 		rhashtable_remove_fast(&ids->key_ht, &ipcp->khtnode,
@@ -402,12 +469,12 @@ static void ipc_kht_remove(struct ipc_ids *ids, struct kern_ipc_perm *ipcp)
  * ipc_ids.rwsem (as a writer) and the spinlock for this ID are held
  * before this function is called, and remain locked on the exit.
  */
-void ipc_rmid(struct ipc_ids *ids, struct kern_ipc_perm *ipcp)
+void ipc_rmid( struct kern_ipc_perm *ipcp)
 {
 	int lid = ipcid_to_idx(ipcp->id);
 
 	idr_remove(&ids->ipcs_idr, lid);
-	ipc_kht_remove(ids, ipcp);
+	ipc_kht_remove(ipcp);
 	ids->in_use--;
 	ipcp->deleted = true;
 
@@ -429,9 +496,9 @@ void ipc_rmid(struct ipc_ids *ids, struct kern_ipc_perm *ipcp)
  * ipc_ids.rwsem (as a writer) and the spinlock for this ID are held
  * before this function is called, and remain locked on the exit.
  */
-void ipc_set_key_private(struct ipc_ids *ids, struct kern_ipc_perm *ipcp)
+void ipc_set_key_private( struct kern_ipc_perm *ipcp)
 {
-	ipc_kht_remove(ids, ipcp);
+	ipc_kht_remove(ipcp);
 	ipcp->key = IPC_PRIVATE;
 }
 
@@ -446,7 +513,7 @@ void ipc_rcu_putref(struct kern_ipc_perm *ptr,
 	if (!refcount_dec_and_test(&ptr->refcount))
 		return;
 
-	call_rcu(&ptr->rcu, func);
+//	call_rcu(&ptr->rcu, func);
 }
 
 /**
@@ -514,7 +581,7 @@ void ipc64_perm_to_ipc_perm(struct ipc64_perm *in, struct ipc_perm *out)
  * Call inside the RCU critical section.
  * The ipc object is *not* locked on exit.
  */
-struct kern_ipc_perm *ipc_obtain_object_idr(struct ipc_ids *ids, int id)
+struct kern_ipc_perm *ipc_obtain_object_idr(int id)
 {
 	struct kern_ipc_perm *out;
 	int lid = ipcid_to_idx(id);
@@ -523,7 +590,8 @@ struct kern_ipc_perm *ipc_obtain_object_idr(struct ipc_ids *ids, int id)
 		return ERR_PTR(-EINVAL);
 
 	out = idr_find(&ids->ipcs_idr, lid);
-	if (!out)
+
+    if (!out)
 		return ERR_PTR(-EINVAL);
 
 	return out;
@@ -538,12 +606,12 @@ struct kern_ipc_perm *ipc_obtain_object_idr(struct ipc_ids *ids, int id)
  *
  * The ipc object is locked on successful exit.
  */
-struct kern_ipc_perm *ipc_lock(struct ipc_ids *ids, int id)
+struct kern_ipc_perm *ipc_lock( int id)
 {
 	struct kern_ipc_perm *out;
 
 	rcu_read_lock();
-	out = ipc_obtain_object_idr(ids, id);
+	out = ipc_obtain_object_idr( id);
 	if (IS_ERR(out))
 		goto err;
 
@@ -576,9 +644,9 @@ err:
  * Call inside the RCU critical section.
  * The ipc object is *not* locked on exit.
  */
-struct kern_ipc_perm *ipc_obtain_object_check(struct ipc_ids *ids, int id)
+struct kern_ipc_perm *ipc_obtain_object_check( int id)
 {
-	struct kern_ipc_perm *out = ipc_obtain_object_idr(ids, id);
+	struct kern_ipc_perm *out = ipc_obtain_object_idr( id);
 
 	if (IS_ERR(out))
 		goto out;
@@ -599,12 +667,12 @@ out:
  *
  * Common routine called by sys_msgget(), sys_semget() and sys_shmget().
  */
-int ipcget(struct ipc_ids *ids, struct ipc_params *params)
+int ipcget(struct ipc_params *params)
 {
 	if (params->key == IPC_PRIVATE)
-		return ipcget_new(ids, params);
+		return ipcget_new( params);
 	else
-		return ipcget_public(ids, params);
+		return ipcget_public( params);
 }
 
 /**
@@ -647,15 +715,13 @@ int ipc_update_perm(struct ipc64_perm *in, struct kern_ipc_perm *out)
  *
  * Call holding the both the rwsem and the rcu read lock.
  */
-struct kern_ipc_perm *ipcctl_pre_down_nolock(struct ipc_namespace *ns,
-					struct ipc_ids *ids, int id, int cmd,
-					struct ipc64_perm *perm, int extra_perm)
+struct kern_ipc_perm *ipcctl_pre_down_nolock(int id)
 {
 	kuid_t euid;
 	int err = -EPERM;
 	struct kern_ipc_perm *ipcp;
 
-	ipcp = ipc_obtain_object_check(ids, id);
+	ipcp = ipc_obtain_object_check( id);
 	if (IS_ERR(ipcp)) {
 		err = PTR_ERR(ipcp);
 		goto err;
@@ -663,10 +729,10 @@ struct kern_ipc_perm *ipcctl_pre_down_nolock(struct ipc_namespace *ns,
 
 
 	
-	euid = current_euid();
+	/*euid = current_euid();
 	if (uid_eq(euid, ipcp->cuid) || uid_eq(euid, ipcp->uid)  ||
-	    ns_capable(ns->user_ns, CAP_SYS_ADMIN))
-		return ipcp; /* successful lookup */
+	    ns_capable(ns->user_ns, CAP_SYS_ADMIN))*/
+	return ipcp; /* successful lookup */
 err:
 	return ERR_PTR(err);
 }
@@ -703,7 +769,7 @@ struct ipc_proc_iter {
 /*
  * This routine locks the ipc structure found at least at position pos.
  */
-static struct kern_ipc_perm *sysvipc_find_ipc(struct ipc_ids *ids, loff_t pos,
+static struct kern_ipc_perm *sysvipc_find_ipc( loff_t pos,
 					      loff_t *new_pos)
 {
 	struct kern_ipc_perm *ipc;
@@ -743,7 +809,7 @@ static void *sysvipc_proc_next(struct seq_file *s, void *it, loff_t *pos)
 	if (ipc && ipc != SEQ_START_TOKEN)
 		ipc_unlock(ipc);
 
-	return sysvipc_find_ipc(iter->ids, *pos, pos);
+	return sysvipc_find_ipc( *pos, pos);
 }
 
 /*
@@ -773,7 +839,7 @@ static void *sysvipc_proc_start(struct seq_file *s, loff_t *pos)
 		return SEQ_START_TOKEN;
 
 	/* Find the (pos-1)th ipc */
-	return sysvipc_find_ipc(ids, *pos - 1, pos);
+	return sysvipc_find_ipc( *pos - 1, pos);
 }
 
 static void sysvipc_proc_stop(struct seq_file *s, void *it)

@@ -1070,6 +1070,7 @@ deps_/home/valentino/CLionProjects/data-exchange/./lib/my_newque.o := \
   include/linux/ipc_namespace.h \
     $(wildcard include/config/ipc/ns.h) \
     $(wildcard include/config/posix/mqueue/sysctl.h) \
+  /home/valentino/CLionProjects/data-exchange/./lib/../include/my_newque.h \
   /home/valentino/CLionProjects/data-exchange/./lib/../util/util.h \
     $(wildcard include/config/arch/want/ipc/parse/version.h) \
     $(wildcard include/config/arch/want/compat/ipc/parse/version.h) \
@@ -1088,8 +1089,6 @@ deps_/home/valentino/CLionProjects/data-exchange/./lib/my_newque.o := \
   include/uapi/linux/libc-compat.h \
     $(wildcard include/config/data.h) \
   include/uapi/linux/hdlc/ioctl.h \
-  /home/valentino/CLionProjects/data-exchange/./lib/../include/my_newque.h \
-  /home/valentino/CLionProjects/data-exchange/./lib/../include/../util/util.h \
 
 /home/valentino/CLionProjects/data-exchange/./lib/my_newque.o: $(deps_/home/valentino/CLionProjects/data-exchange/./lib/my_newque.o)
 
