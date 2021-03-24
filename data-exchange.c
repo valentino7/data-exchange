@@ -29,16 +29,6 @@
 //#define IPC_PRIVATE 0
 
 
-
-
-
-
-
-
-
-
-
-
 #include <linux/rculist.h>
 #include <linux/preempt.h>
 #include <linux/module.h>
@@ -80,10 +70,9 @@
 #include <linux/spinlock.h>
 #include <linux/msg.h>
 #include "./util/util.h"
-
+#include <asm/unistd.h>
 //TODO TEST
 #include <linux/delay.h>
-
 //#include "./include/vtpmo.h"
 
 
@@ -207,18 +196,19 @@ char  kernel_buff[MAX_MSG_SIZE];
 
 extern int syscall_table_finder(unsigned long **, unsigned long ***);
 
-int sys_tag_get(int, int, int);
-int sys_tag_send(int, int, char*, size_t);
-int sys_tag_receive(int, int, char*, size_t);
-int sys_tag_cmd(int, int);
+//long sys_tag_get(int, int, int);
+//int sys_tag_send(int, int, char*, size_t);
+//int sys_tag_receive(int, int, char*, size_t);
+//int sys_tag_cmd(int, int);
 
-#define MAX_FREE 1
+#define MAX_FREE 4
 int free_entries[MAX_FREE];
 module_param_array(free_entries,int,NULL,0660);//default array size already known - here we expose what entries are free
-unsigned long new_sys_call_array[] = {(unsigned long)sys_tag_get,(unsigned long)sys_tag_send,(unsigned long)sys_tag_receive,(unsigned long)sys_tag_cmd};
-#define HACKED_ENTRIES (int)(sizeof(new_sys_call_array)/sizeof(unsigned long))
-
-
+//unsigned long new_sys_call_array[] = {(unsigned long)sys_tag_get,(unsigned long)sys_tag_send,(unsigned long)sys_tag_receive,(unsigned long)sys_tag_cmd};
+//#define HACKED_ENTRIES (int)(sizeof(new_sys_call_array)/sizeof(int))
+#define HACKED_ENTRIES 4
+int restore[HACKED_ENTRIES] = {[0 ... (HACKED_ENTRIES-1)] -1};
+unsigned long new_sys_call_array[4];
 //struttura TAG
 //static int enable_sleep = 1;// this can be configured at run time via the sys file system - 1 meas any sleeping thread is freezed
 //module_param(enable_sleep,int,0660);
@@ -244,7 +234,6 @@ static spinlock_t list_tag_lock;
 
 
 struct ipc_ids *ids;
-
 
 
 static void tag_reclaim_callback(struct rcu_head *rcu) {
@@ -274,19 +263,15 @@ char* load_msg(char* buffer, int size){
 
     addr = (void *) get_zeroed_page(GFP_KERNEL);
 
-    if (addr == NULL) return -1;
+    if (addr == NULL) return NULL;
 
     ret = copy_from_user((char *) addr, (char *) buffer, size);//returns the number of bytes NOT copied
 
     return addr;
 }
-
-void awake_all(struct _tag_elem* p, int tag){
+void awake_all( int tag){
     int i;
-    for (i = 0; i < 32; i++){
-//        p->level[i].awake=0;
-        wake_up(&p->level[i].my_queue);
-    }
+
 }
 
 static void msg_rcu_free(struct rcu_head *head)
@@ -338,39 +323,7 @@ static void freeque( struct kern_ipc_perm *ipcp)
 }
 
 
-int awake_all(int tag){
-    struct kern_ipc_perm *ipcp;
-    msg_queue *msq;
-    int err;
-//    down_write(&ids->rwsem);
-    rcu_read_lock();
 
-    ipcp = ipcctl_pre_down_nolock( tag);
-    if (IS_ERR(ipcp)) {
-        err = PTR_ERR(ipcp);
-        up_write(&ids->rwsem);
-        return err;
-//        goto out_unlock1;
-    }
-
-    msq = container_of(ipcp, msg_queue, q_perm);
-
-    /* err = security_msg_queue_msgctl(msq, cmd);
-     if (err)
-         goto out_unlock1;*/
-
-    ipc_lock_object(&msq->q_perm);
-
-
-    /* freeque unlocks the ipc object and rcu */
-    freeque( ipcp);
-
-    //goto out_up;
-//    rcu_read_unlock();
-    up_write(&ids->rwsem);
-    return 1;
-
-}
 
 
 int remove_tag(int tag){
@@ -390,7 +343,7 @@ int remove_tag(int tag){
     down_write(&ids->rwsem);
     rcu_read_lock();
 
-    ipcp = ipcctl_pre_down_nolock( tag);
+    ipcp = ipcctl_obtain_check( tag);
     if (IS_ERR(ipcp)) {
         err = PTR_ERR(ipcp);
         rcu_read_unlock();
@@ -639,10 +592,12 @@ asmlinkage int sys_tag_get(int key, int command, int permission){
     //caso di errore
     return -1;
 }
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
 static unsigned long sys_tag_get = (unsigned long) __x64_sys_tag_get;
 #else
 #endif
+
 
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
@@ -728,7 +683,7 @@ static unsigned long sys_tag_send = (unsigned long) __x64_sys_tag_send;
 
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
-__SYSCALL_DEFINEx(4, _tag_receive, int, tag, int, leve, char*, buffer, size_t, size){
+__SYSCALL_DEFINEx(4, _tag_receive, int, tag, int, level, char*, buffer, size_t, size){
 #else
 asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
 #endif
@@ -886,10 +841,12 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
     }
 
 }
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
 static unsigned long sys_tag_receive = (unsigned long) __x64_sys_tag_receive;
 #else
 #endif
+
 
 
 
@@ -932,10 +889,9 @@ asmlinkage int sys_tag_cmd(int tag, int command){
 }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
-static unsigned long sys_tag_cmd = (unsigned long) __x64_sys_tag_cmd;	
+static unsigned long sys_tag_cmd = (unsigned long) __x64_sys_tag_cmd;
 #else
 #endif
-
 
 
 unsigned long cr0;
@@ -947,8 +903,8 @@ write_cr0_forced(unsigned long val)
 
     /* __asm__ __volatile__( */
     asm volatile(
-        "mov %0, %%cr0"
-        : "+r"(val), "+m"(__force_order));
+    "mov %0, %%cr0"
+    : "+r"(val), "+m"(__force_order));
 }
 
 static inline void
@@ -963,14 +919,16 @@ unprotect_memory(void)
     write_cr0_forced(cr0 & ~X86_CR0_WP);
 }
 
+
+
 #else
 #endif
 
 
-
 int init_module(void) {
-	
+
 	int i,j;
+
 
     ipc_init_ids();
 	printk("%s: initializing\n",MODNAME);
@@ -979,7 +937,7 @@ int init_module(void) {
 //    ipc_init_proc_interface("sysvipc/dataExchange","       key      msqid \n", sysvipc_msg_proc_show);
     spin_lock_init(&list_tag_lock);
 
-
+    //Doppio puntatore che punta all'array che mantiene dentro le system call libere
     syscall_table_finder(&hacked_ni_syscall, &hacked_syscall_tbl);
 
 	if(!hacked_syscall_tbl){
@@ -990,23 +948,23 @@ int init_module(void) {
 	j=0;
 	for(i=0;i<ENTRIES_TO_EXPLORE;i++)
 		if(hacked_syscall_tbl[i] == hacked_ni_syscall){
-			//printk("%s: found sys_ni_syscall entry at syscall_table[%d]\n",MODNAME,i);
+			printk("%s: found sys_ni_syscall entry at syscall_table[%d]\n",MODNAME,i);
 			free_entries[j++] = i;
 			if(j>=MAX_FREE) break;
 		}
 
 #ifdef SYS_CALL_INSTALL
 	cr0 = read_cr0();
-        unprotect_memory();
-        /*hacked_syscall_tbl[FIRST_NI_SYSCALL] = (unsigned long*)sys_tag_get;
-	hacked_syscall_tbl[SECOND_NI_SYSCALL] = (unsigned long*)sys_tag_send;
-	hacked_syscall_tbl[THIRD_NI_SYSCALL] = (unsigned long*)sys_tag_receive;
-	hacked_syscall_tbl[FOURTH_NI_SYSCALL] = (unsigned long*)sys_tag_cmd;*/
- 	for(i=0;i<HACKED_ENTRIES;i++){
-                ((unsigned long *)hacked_syscall_tbl)[free_entries[i]] = (unsigned long)new_sys_call_array[i];
+	unprotect_memory();
+    hacked_syscall_tbl[free_entries[0]] = (unsigned long*)sys_tag_get;
+    hacked_syscall_tbl[free_entries[1]] = (unsigned long*)sys_tag_send;
+    hacked_syscall_tbl[free_entries[2]] = (unsigned long*)sys_tag_receive;
+    hacked_syscall_tbl[free_entries[3]] = (unsigned long*)sys_tag_cmd;
+ 	/*for(i=0;i<HACKED_ENTRIES;i++){
+                ((unsigned long *)hacked_syscall_tbl)[free_entries[i]] = (unsigned long*)new_sys_call_array[i];
                 printk("%s: sys call numero  %d\n",MODNAME,free_entries[i]);
 
-    }
+    }*/
  	protect_memory();
 	//printk("%s: a sys_call with 2 parameters has been installed as a trial on the sys_call_table at displacement %d\n",MODNAME,FIRST_NI_SYSCALL);	
 #else

@@ -1,0 +1,1 @@
+cmd_/home/valentino/CLionProjects/data-exchange/the_data-exchangee.ko := ld -r -m elf_x86_64  -z max-page-size=0x200000  --build-id=sha1  -T ./scripts/module-common.lds -o /home/valentino/CLionProjects/data-exchange/the_data-exchangee.ko /home/valentino/CLionProjects/data-exchange/the_data-exchangee.o /home/valentino/CLionProjects/data-exchange/the_data-exchangee.mod.o;  true

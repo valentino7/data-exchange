@@ -61,7 +61,7 @@ MODULE_DESCRIPTION("system call table hacker");
 #define MAX_ACQUIRES 4
 
 
-unsigned long *get_syscall_table(void)
+/*unsigned long *get_syscall_table(void)
 {
         unsigned long *syscall_table;
         unsigned long int i;
@@ -152,7 +152,7 @@ found_available_entries:
 
 	return ret;
 
-}
+}*/
 
 
 
@@ -165,12 +165,12 @@ extern int sys_vtpmo(unsigned long vaddr);
 #define START 			0xffffffff00000000ULL		// use this as starting address --> this is a biased search since does not start from 0xffff000000000000
 #define MAX_ADDR		0xfffffffffff00000ULL
 #define FIRST_NI_SYSCALL	134
-#define SECOND_NI_SYSCALL	174
-#define THIRD_NI_SYSCALL	182
-#define FOURTH_NI_SYSCALL	183
-#define FIFTH_NI_SYSCALL	214
-#define SIXTH_NI_SYSCALL	215
-#define SEVENTH_NI_SYSCALL	236
+#define SECOND_NI_SYSCALL	135
+#define THIRD_NI_SYSCALL	136
+#define FOURTH_NI_SYSCALL	137
+#define FIFTH_NI_SYSCALL	180
+#define SIXTH_NI_SYSCALL	181
+#define SEVENTH_NI_SYSCALL	182
 
 
 
@@ -238,7 +238,7 @@ int validate_page(unsigned long *addr, unsigned long*** hacked_syscall_tbl, unsi
 }
 
 /* This routines looks for the syscall table.  */
-void syscall_table_finder(unsigned long ** hacked_ni_syscall, unsigned long *** hacked_syscall_tbl){
+void syscall_table_finder(unsigned long ** hacked_ni_syscall, unsigned long*** hacked_syscall_tbl){
     unsigned long k; // current page
     unsigned long candidate; // current page
 
@@ -255,6 +255,5 @@ void syscall_table_finder(unsigned long ** hacked_ni_syscall, unsigned long *** 
             }
         }
     }
-
 
 }

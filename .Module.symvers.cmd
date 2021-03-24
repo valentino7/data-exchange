@@ -1,0 +1,1 @@
+cmd_/home/valentino/CLionProjects/data-exchange/Module.symvers := sed 's/ko$$/o/' /home/valentino/CLionProjects/data-exchange/modules.order | scripts/mod/modpost -m -a   -o /home/valentino/CLionProjects/data-exchange/Module.symvers -e -i Module.symvers   -T -
