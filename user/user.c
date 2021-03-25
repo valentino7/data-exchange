@@ -10,7 +10,7 @@
 #define TAG_GET 134
 #define TAG_SEND 174
 #define TAG_RECEIVE 177
-#define TAG_CMD 178
+#define TAG_CTL 178
 
 #define REMOVE 0
 #define AWAKE_ALL 1
@@ -31,8 +31,8 @@ int sys_tag_receive(int tag, int level, char* buffer, ssize_t size){
     return syscall(TAG_RECEIVE, tag, level, buffer, size);
 }
 
-int sys_tag_cmd(int tag, int command){
-    return syscall(TAG_CMD, tag, command);
+int sys_tag_ctl(int tag, int command){
+    return syscall(TAG_CTL, tag, command);
 }
 
 

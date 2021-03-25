@@ -339,12 +339,14 @@ msg_queue* alloc_and_fill_tag_service(void) {
 
     //inizializzo le 32 wait queue
     printk(" prima aver inizializzato awake:\n" );
+    rwlock_init(&new->tag_lock);
 
-//    spin_lock_init(&new->tag_lock);
     new->num_thread_per_tag=0;
     for (i = 0; i < 32; i++) {
         new->level[i].group = kmalloc(sizeof(struct _tag_level_group), GFP_KERNEL);
-        spin_lock_init(&new->level[i].queue_lock);
+//        spin_lock_init(&new->level[i].level_lock);
+        rwlock_init(&new->level[i].level_lock);
+//        spin_lock_init(&new->level[i].level_lock);
         spin_lock_init(&new->level[i].group->lock_presence_counter);
 
         new->level[i].group->awake = 1;

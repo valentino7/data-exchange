@@ -109,28 +109,29 @@ struct _tag_level{
     unsigned long num_thread __attribute__((aligned(8)));
     wait_queue_head_t my_queue;
     struct _tag_level_group* group;
-    spinlock_t queue_lock;
+    //spinlock_t queue_lock;
+    rwlock_t level_lock;
 };
 
 //almeno 256 servizi runnabili
 typedef struct _tag_elem{
     struct kern_ipc_perm q_perm;
-
     struct _tag_level* level;
-    int tag;
-    int key;
+    int num_thread_per_tag __attribute__((aligned(8)));
+    rwlock_t tag_lock;
+
+//    int tag;
+//    int key;
 
     //lock per rimuovere in manierea sicura
 //    spinlock_t tag_lock;
     //contatore accessi
-    int num_thread_per_tag __attribute__((aligned(8)));
 
 
-    struct list_head node;
-    struct rcu_head rcu;
-
-    struct _tag_elem * next;
-    struct _tag_elem * prev;
+//    struct list_head node;
+//    struct rcu_head rcu;
+//    struct _tag_elem * next;
+//    struct _tag_elem * prev;
     //tid creator
 } msg_queue;
 
