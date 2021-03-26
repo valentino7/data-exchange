@@ -88,118 +88,8 @@ unsigned long **hacked_syscall_tbl=NULL;
 #define ENTRIES_TO_EXPLORE 256
 char  kernel_buff[MAX_MSG_SIZE];
 
-//extern int sys_vtpmo(unsigned long vaddr);
-//
-//
-//#define ADDRESS_MASK 0xfffffffffffff000//to migrate
-//
-//#define START 			0xffffffff00000000ULL		// use this as starting address --> this is a biased search since does not start from 0xffff000000000000
-//#define MAX_ADDR		0xfffffffffff00000ULL
-//#define FIRST_NI_SYSCALL	134
-//#define SECOND_NI_SYSCALL	174
-//#define THIRD_NI_SYSCALL	182
-//#define FOURTH_NI_SYSCALL	183
-//#define FIFTH_NI_SYSCALL	214
-//#define SIXTH_NI_SYSCALL	215
-//#define SEVENTH_NI_SYSCALL	236
-//
-//#define ENTRIES_TO_EXPLORE 256
-//
-//
-//unsigned long *hacked_ni_syscall=NULL;
-//unsigned long **hacked_syscall_tbl=NULL;
-//
-//unsigned long sys_call_table_address = 0x0;
-//module_param(sys_call_table_address, ulong, 0660);
-//
-//unsigned long sys_ni_syscall_address = 0x0;
-//module_param(sys_ni_syscall_address, ulong, 0660);
-//
-//
-//int good_area(unsigned long * addr){
-//
-//	int i;
-//
-//	for(i=1;i<FIRST_NI_SYSCALL;i++){
-//		if(addr[i] == addr[FIRST_NI_SYSCALL]) goto bad_area;
-//	}
-//
-//	return 1;
-//
-//bad_area:
-//
-//	return 0;
-//
-//}
-
-
-
-///* This routine checks if the page contains the begin of the syscall_table.  */
-//int validate_page(unsigned long *addr){
-//	int i = 0;
-//	unsigned long page 	= (unsigned long) addr;
-//	unsigned long new_page 	= (unsigned long) addr;
-//	for(; i < PAGE_SIZE; i+=sizeof(void*)){
-//		new_page = page+i+SEVENTH_NI_SYSCALL*sizeof(void*);
-//
-//		// If the table occupies 2 pages check if the second one is materialized in a frame
-//		if(
-//			( (page+PAGE_SIZE) == (new_page & ADDRESS_MASK) )
-//			&& sys_vtpmo(new_page) == NO_MAP
-//		)
-//			break;
-//		// go for patter matching
-//		addr = (unsigned long*) (page+i);
-//		if(
-//			   ( (addr[FIRST_NI_SYSCALL] & 0x3  ) == 0 )
-//			   && (addr[FIRST_NI_SYSCALL] != 0x0 )			// not points to 0x0
-//			   && (addr[FIRST_NI_SYSCALL] > 0xffffffff00000000 )	// not points to a locatio lower than 0xffffffff00000000
-//	//&& ( (addr[FIRST_NI_SYSCALL] & START) == START )
-//			&&   ( addr[FIRST_NI_SYSCALL] == addr[SECOND_NI_SYSCALL] )
-//			&&   ( addr[FIRST_NI_SYSCALL] == addr[THIRD_NI_SYSCALL]	 )
-//			&&   ( addr[FIRST_NI_SYSCALL] == addr[FOURTH_NI_SYSCALL] )
-//			&&   ( addr[FIRST_NI_SYSCALL] == addr[FIFTH_NI_SYSCALL] )
-//			&&   ( addr[FIRST_NI_SYSCALL] == addr[SIXTH_NI_SYSCALL] )
-//			&&   ( addr[FIRST_NI_SYSCALL] == addr[SEVENTH_NI_SYSCALL] )
-//			&&   (good_area(addr))
-//		){
-//			hacked_ni_syscall = (void*)(addr[FIRST_NI_SYSCALL]);				// save ni_syscall
-//			sys_ni_syscall_address = (unsigned long)hacked_ni_syscall;
-//			hacked_syscall_tbl = (void*)(addr);				// save syscall_table address
-//			sys_call_table_address = (unsigned long) hacked_syscall_tbl;
-//			return 1;
-//		}
-//	}
-//	return 0;
-//}
-//
-///* This routines looks for the syscall table.  */
-//void syscall_table_finder(void){
-//	unsigned long k; // current page
-//	unsigned long candidate; // current page
-//
-//	for(k=START; k < MAX_ADDR; k+=4096){
-//		candidate = k;
-//		if(
-//			(sys_vtpmo(candidate) != NO_MAP)
-//		){
-//			// check if candidate maintains the syscall_table
-//			if(validate_page( (unsigned long *)(candidate)) ){
-//				printk("%s: syscall table found at %px\n",MODNAME,(void*)(hacked_syscall_tbl));
-//				printk("%s: sys_ni_syscall found at %px\n",MODNAME,(void*)(hacked_ni_syscall));
-//				break;
-//			}
-//		}
-//	}
-//
-//}
 
 extern int syscall_table_finder(unsigned long **, unsigned long ***);
-
-//long sys_tag_get(int, int, int);
-//int sys_tag_send(int, int, char*, size_t);
-//int sys_tag_receive(int, int, char*, size_t);
-//int sys_tag_cmd(int, int);
 
 #define MAX_FREE 4
 int free_entries[MAX_FREE];
@@ -229,8 +119,8 @@ typedef struct _packed_work{
 //elem tail = {NULL,-1,-1,NULL,NULL,NULL,NULL};
 
 //lista RCU
-static LIST_HEAD(list_tag_rcu);
-static spinlock_t list_tag_lock;
+//static LIST_HEAD(list_tag_rcu);
+//static spinlock_t list_tag_lock;
 
 
 struct ipc_ids *ids;
@@ -407,54 +297,6 @@ static int sysvipc_msg_proc_show(struct seq_file *s, void *it)
 	return 0;
 }
 #endif
-
-/*void free_list(void)
-{
-    int i;
-    struct list_head *p,*node;
-    elem l;
-    elem* tmp_elem;
-    //position n head, n è una struttura list_head temporanea per usarla come storage temporaneo
-    list_for_each_safe(p, node, &l.node) {
-        tmp_elem = list_entry(p, elem, node);
-        list_del(p);
-        for (i = 0; i < 32; i++) {
-            kfree(tmp_elem->level[i].group);
-        }
-        kfree(tmp_elem->level);
-        kfree(tmp_elem);
-    }*/
-
-
-//    elem *n = head.next;
-//    elem *n1;
-//    printk("%s:LIBERO MEMORIA 1\n", MODNAME);
-//
-//    head.next=NULL;
-//    printk("%s:LIBERO MEMORIA 1\n", MODNAME);
-//
-//    while(n!=NULL ){
-//        printk("%s:LIBERO MEMORIA 2\n", MODNAME);
-//
-//        n->prev=NULL;
-//        printk("%s:LIBERO MEMORIA 3\n", MODNAME);
-//
-//        n1 = n;
-//        printk("%s:LIBERO MEMORIA 4\n", MODNAME);
-//
-//        n = n->next;
-//        printk("%s:LIBERO MEMORIA 5\n", MODNAME);
-//
-//        //se sono arrivato alla tail è statica e quindi non faccio la free
-//        if (n !=NULL){
-//            printk("%s:LIBERO MEMORIA 6\n", MODNAME);
-//            kfree(n1);
-//        }
-//        printk("%s:LIBERO MEMORIA 7\n", MODNAME);
-//
-//    }
-//    printk("%s:LIBERO MEMORIA\n", MODNAME);
-//}
 
 
 
@@ -675,7 +517,7 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
         printk("errore ipc get ref");
         err = -EIDRM;
         //TODO attenzione ipc_unlock_object(&msq->q_perm);
-        read_trylock(&msq->tag_lock);
+        read_unlock(&msq->tag_lock);
         rcu_read_unlock();
         return err;
     }
@@ -706,7 +548,7 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
 //        spin_unlock(&p->level[level].level_lock);
     if(copy->awake == 1){
         printk("%s: thread exiting sleep for signal\n",MODNAME);
-        read_trylock(&msq->tag_lock);
+        read_unlock(&msq->tag_lock);
         rcu_read_unlock();
         return -EINTR;
     }
@@ -941,5 +783,5 @@ void cleanup_module(void) {
 //    free_list();
 //    print_list_tag(8);
     printk("%s: shutting down\n",MODNAME);
-        
+    remove_proc_entry("sysvipc/dataExchange",NULL);
 }
