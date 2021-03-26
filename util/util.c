@@ -851,7 +851,7 @@ int ipc_parse_version(int *cmd)
 
 #ifdef CONFIG_PROC_FS
 struct ipc_proc_iter {
-	struct ipc_ids *ids;
+//	struct ipc_ids *ids;
 	struct ipc_proc_iface *iface;
 };
 
@@ -879,7 +879,7 @@ static struct kern_ipc_perm *sysvipc_find_ipc( loff_t pos,
 		ipc = idr_find(&ids->ipcs_idr, pos);
 		if (ipc != NULL) {
 			rcu_read_lock();
-			ipc_lock_object(ipc);
+//			ipc_lock_object(ipc);
 			break;
 		}
 	}
@@ -895,8 +895,8 @@ static void *sysvipc_proc_next(struct seq_file *s, void *it, loff_t *pos)
 	struct kern_ipc_perm *ipc = it;
 
 	/* If we had an ipc id locked before, unlock it */
-	if (ipc && ipc != SEQ_START_TOKEN)
-		ipc_unlock(ipc);
+//	if (ipc && ipc != SEQ_START_TOKEN)
+//		ipc_unlock(ipc);
 
 	return sysvipc_find_ipc( *pos, pos);
 }
@@ -911,7 +911,7 @@ static void *sysvipc_proc_start(struct seq_file *s, loff_t *pos)
 	struct ipc_proc_iface *iface = iter->iface;
 	//struct ipc_ids *ids;
 
-	ids = iter->ids;
+//	ids = iter->ids;
 
 	/*
 	 * Take the lock - this will be released by the corresponding
@@ -939,10 +939,10 @@ static void sysvipc_proc_stop(struct seq_file *s, void *it)
 //	struct ipc_ids *ids;
 
 	/* If we had a locked structure, release it */
-	if (ipc && ipc != SEQ_START_TOKEN)
-		ipc_unlock(ipc);
+//	if (ipc && ipc != SEQ_START_TOKEN)
+//		ipc_unlock(ipc);
 
-	ids = iter->ids;
+//	ids = iter->ids;
 	/* Release the lock we took in start() */
 	up_read(&ids->rwsem);
 }
@@ -976,7 +976,7 @@ static int sysvipc_proc_open(struct inode *inode, struct file *file)
 		return -ENOMEM;
 
 	iter->iface = PDE_DATA(inode);
-	iter->ids    = ids;
+//	iter->ids    = ids;
 
 	return 0;
 }

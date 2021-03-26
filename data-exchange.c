@@ -28,7 +28,7 @@
 #define OPEN 1
 //#define IPC_PRIVATE 0
 
-
+#include <linux/proc_fs.h>
 #include <linux/rculist.h>
 #include <linux/preempt.h>
 #include <linux/module.h>
