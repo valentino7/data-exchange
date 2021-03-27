@@ -217,16 +217,23 @@ int send_msg(int tag, int leve, char* buffer, size_t size){
 struct global_data {
     wait_queue_head_t wq;
     atomic_t thread_count;
+    int error[32];
     int tag;
     int level;
 };
 
 
-int wrapper_thread_send (global_data *gd) {
+int wrapper_thread_send (void* data) {
+    struct global_data *gd;
+    //level uguale id thread
+    int level;
     char* buff ;
 
+    gd= (struct global_data *) data;
+    level = gd->level;
     buff= "\0";
-    if(send_msg(gf->tag, gf->level, buff, 0))
+    gd->error[level] = send_msg(gf->tag, gf->level, buff, 0));
+
     atomic_dec(&gd->server_threads);
     wake_up(&gd->wq);
 }
@@ -234,6 +241,7 @@ int wrapper_thread_send (global_data *gd) {
 int awake_all(int tag){
     struct global_data gd;
     struct task_struct *kthread;
+    int i;
 
     init_wait_queue_head(&gd.wq);
     for(i=0; i!=32; i++){
@@ -242,11 +250,19 @@ int awake_all(int tag){
         if (IS_ERR(kthread)) {
             ret = PTR_ERR(kthread);
             printk("Unable to run kthread err %d\n", ret);
+            if(atomic_read(&gd.thread_count) != 0)
+                wait_event_interruptible(&gd.wq, atomic_read(&gd.thread_count) == 0);
             return ret;
         }
     }
     wait_event_interruptible(&gd.wq, atomic_read(&gd.thread_count) == 0);
     /* final cleanup */
+    //se ho ricevuto un errore ritorno awake all error
+    for(i=0; i!=32; i++) {
+        if (gd.error[i] < 0)
+            return -1;
+    }
+
     return 1;
 }
 
@@ -500,8 +516,9 @@ asmlinkage int sys_tag_send(int tag, int level, char* buffer, size_t size){
     //TODO CHECK SULLA PERMISSION
 
     //trade off tra sicurezza e velocità
-    if (size >= (MAX_MSG_SIZE - 1) || (long) size < 0 || tag < 0 || level > 31 || level < 0) goto bad_size;//leave 1 byte for string terminator
-
+    if (size >= (MAX_MSG_SIZE - 1) || (long) size < 0 || tag < 0 || level > 31 || level < 0)
+//        goto bad_size;//leave 1 byte for string terminator
+        return -1;
     return send_msg(tag, level, buffer, size);
 
 }
