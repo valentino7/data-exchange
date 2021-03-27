@@ -222,7 +222,7 @@ struct global_data {
 };
 
 
-wrapper_thread_send (global_data *gd) {
+int wrapper_thread_send (global_data *gd) {
     char* buff ;
 
     buff= "\0";
@@ -233,12 +233,16 @@ wrapper_thread_send (global_data *gd) {
 
 int awake_all(int tag){
     struct global_data gd;
+    struct task_struct *kthread;
+
     init_wait_queue_head(&gd.wq);
     for(i=0; i!=32; i++){
         atomic_inc(&gd.thread_count);
-        if (!(kthread_run(wrapper_thread_send, &gd)) {
-            atomic_dec(&gd.thread_count);
-            return -1;
+        kthread = kthread_run(wrapper_thread_send, &gd, "send kthreads");
+        if (IS_ERR(kthread)) {
+            ret = PTR_ERR(kthread);
+            printk("Unable to run kthread err %d\n", ret);
+            return ret;
         }
     }
     wait_event_interruptible(&gd.wq, atomic_read(&gd.thread_count) == 0);
