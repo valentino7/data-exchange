@@ -299,6 +299,7 @@ int ipc_addid( struct kern_ipc_perm *new, int limit)
 	new->cuid = new->uid = euid;
 	new->gid = new->cgid = egid;
 
+
     new->deleted = false;
 
     idx = ipc_idr_alloc(new);
@@ -400,7 +401,7 @@ int my_newque(struct ipc_params * params){
 static int ipcget_new( struct ipc_params *params)
 {
 	int err = -1;
-    int flg = params->flg;
+    int flg = params->flg>>1;
 
     if(flg == (IPC_CREAT | IPC_EXCL) || flg == (IPC_CREAT) || flg == (IPC_EXCL) ){
         down_write(&ids->rwsem);
@@ -446,7 +447,7 @@ static int ipcget_new( struct ipc_params *params)
 static int ipcget_public(struct ipc_params * params)
 {
 	struct kern_ipc_perm *ipcp;
-	int flg = params->flg;
+	int flg = params->flg>>1;
 	int err;
 
 	/*
@@ -764,25 +765,25 @@ int ipcget(struct ipc_params *params)
 		return ipcget_public( params);
 }
 
-/**
- * ipc_update_perm - update the permissions of an ipc object
- * @in:  the permission given as input.
- * @out: the permission of the ipc to set.
- */
-int ipc_update_perm(struct ipc64_perm *in, struct kern_ipc_perm *out)
-{
-	kuid_t uid = make_kuid(current_user_ns(), in->uid);
-	kgid_t gid = make_kgid(current_user_ns(), in->gid);
-	if (!uid_valid(uid) || !gid_valid(gid))
-		return -EINVAL;
-
-	out->uid = uid;
-	out->gid = gid;
-	out->mode = (out->mode & ~S_IRWXUGO)
-		| (in->mode & S_IRWXUGO);
-
-	return 0;
-}
+///**
+// * ipc_update_perm - update the permissions of an ipc object
+// * @in:  the permission given as input.
+// * @out: the permission of the ipc to set.
+// */
+//int ipc_update_perm(struct ipc64_perm *in, struct kern_ipc_perm *out)
+//{
+//	kuid_t uid = make_kuid(current_user_ns(), in->uid);
+//	kgid_t gid = make_kgid(current_user_ns(), in->gid);
+//	if (!uid_valid(uid) || !gid_valid(gid))
+//		return -EINVAL;
+//
+//	out->uid = uid;
+//	out->gid = gid;
+//	out->mode = (out->mode & ~S_IRWXUGO)
+//		| (in->mode & S_IRWXUGO);
+//
+//	return 0;
+//}
 
 /**
  * ipcctl_pre_down_nolock - retrieve an ipc and check permissions for some IPC_XXX cmd

@@ -28,6 +28,7 @@
 #define OPEN 1
 //#define IPC_PRIVATE 0
 
+#include <linux/capability.h>
 #include <linux/proc_fs.h>
 #include <linux/rculist.h>
 #include <linux/preempt.h>
@@ -149,26 +150,52 @@ char* load_msg(char* buffer, int size){
     return addr;
 }
 
-int send_msg(int tag, int leve, char* buffer, size_t size){
+int check_permission(int permission,  kuid_t euid){
+    kuid_t ceuid;
+    ceuid = current_euid();
+    if( (permission==RESTRICT &&  euid.val == ceuid.val) || permission == NO_RESTRICT)
+        return 1;
+    return -1;
+
+}
+
+struct _tag_elem* check_and_get_tag_if_exists(int id){
+    struct kern_ipc_perm *ipcp = ipc_obtain_object_idr(id);
+    //prendo l'ultimo bit con &1
+    //restituisco errore in caso non ci siano permessi
+    if(!check_permission(ipcp->mode&1, ipcp-> cuid ) )
+        return -1;
+
+    if (IS_ERR(ipcp))
+        return ERR_CAST(ipcp);
+
+    return container_of(ipcp, struct _tag_elem, q_perm);
+}
+
+
+int send_msg(int tag, int level, char* buffer, size_t size){
     void* addr;
+    struct _tag_elem* msq;
+    struct _tag_level_group* copy;
+    int err;
+    unsigned long ret;
 
     addr = load_msg(buffer, size);
 
     //GET TAG FROM IPC STRUCT
     rcu_read_lock();
 
-    msq= check_and_get_tag_if_exists(tag);
+    msq = check_and_get_tag_if_exists(tag);
 
     if (IS_ERR(msq)) {
         err = PTR_ERR(msq);
         goto out_unlock1;
     }
-
     //INIZIO LAVORO PER SVEGLIARE I THREAD
     //PRENDO IL LOCK SUL GROUP CAMBIO LA VISTA DEL PUNTATORE A GROUP
-
     write_lock(&msq->level[level].level_lock);
-    int count = atomic_read();
+    //controllo se il tag è stato eliminato
+    int count = atomic_read(&msq->q_perm.refcount.refs);
     if(count== -1 || count==1){
         //NON CI SONO THREAD IN ATTESA
         write_unlock(&msq->level[level].level_lock);
@@ -203,8 +230,8 @@ int send_msg(int tag, int leve, char* buffer, size_t size){
     return size - ret;
 
 
-    bad_size:
-    return -1;
+//    bad_size:
+//    return -1;
 
     out_unlock1:
     rcu_read_unlock();
@@ -232,18 +259,21 @@ int wrapper_thread_send (void* data) {
     gd= (struct global_data *) data;
     level = gd->level;
     buff= "\0";
-    gd->error[level] = send_msg(gf->tag, gf->level, buff, 0));
+    gd->error[level] = send_msg(gd->tag, gd->level, buff, 0);
 
-    atomic_dec(&gd->server_threads);
+    atomic_dec(&gd->thread_count);
     wake_up(&gd->wq);
+
+    return 1;
 }
 
 int awake_all(int tag){
     struct global_data gd;
     struct task_struct *kthread;
     int i;
+    int ret;
 
-    init_wait_queue_head(&gd.wq);
+    init_waitqueue_head(&gd.wq);
     for(i=0; i!=32; i++){
         atomic_inc(&gd.thread_count);
         kthread = kthread_run(wrapper_thread_send, &gd, "send kthreads");
@@ -251,11 +281,11 @@ int awake_all(int tag){
             ret = PTR_ERR(kthread);
             printk("Unable to run kthread err %d\n", ret);
             if(atomic_read(&gd.thread_count) != 0)
-                wait_event_interruptible(&gd.wq, atomic_read(&gd.thread_count) == 0);
+                wait_event_interruptible(gd.wq, atomic_read(&gd.thread_count) == 0);
             return ret;
         }
     }
-    wait_event_interruptible(&gd.wq, atomic_read(&gd.thread_count) == 0);
+    wait_event_interruptible(gd.wq, atomic_read(&gd.thread_count) == 0);
     /* final cleanup */
     //se ho ricevuto un errore ritorno awake all error
     for(i=0; i!=32; i++) {
@@ -385,19 +415,11 @@ int remove_tag(int tag){
 }
 
 
-struct _tag_elem* check_and_get_tag_if_exists(int id){
-    struct kern_ipc_perm *ipcp = ipc_obtain_object_idr(id);
-
-    if (IS_ERR(ipcp))
-        return ERR_CAST(ipcp);
-
-    return container_of(ipcp, struct _tag_elem, q_perm);
-}
 
 #ifdef CONFIG_PROC_FS
 static int sysvipc_msg_proc_show(struct seq_file *s, void *it)
 {
-	struct user_namespace *user_ns = seq_user_ns(s);
+//	struct user_namespace *user_ns = seq_user_ns(s);
 	struct kern_ipc_perm *ipcp = it;
 	struct _tag_elem *msq = container_of(ipcp, struct _tag_elem, q_perm);
 
@@ -422,6 +444,9 @@ __SYSCALL_DEFINEx(3, _tag_get, int, key, int, command, int, permission){
 asmlinkage int sys_tag_get(int key, int command, int permission){
 #endif
     int result;
+    int cmd_permission;
+    struct ipc_params params;
+
     if (permission != RESTRICT && permission != NO_RESTRICT ){
         printk("%s: permission non valido %d\n",MODNAME,current->cred->euid);
         return -1;
@@ -433,9 +458,11 @@ asmlinkage int sys_tag_get(int key, int command, int permission){
 //check se non è ne open ne esclusive
 //TODO valore di ritorno -1
 //todo allocare messaggio
-    struct ipc_params params;
+
     params.key=key;
-    params.flg=command;
+    //shift di uno il command per salvare insieme anche le permission
+    command = command <<1;
+    cmd_permission = command + permission;
     result = ipcget(&params);
     printk("risultato id %d \n ", result);
     return result;
@@ -504,11 +531,11 @@ __SYSCALL_DEFINEx(4, _tag_send, int, tag, int, level, char*, buffer, size_t, siz
      * while var local atomic counter == version reader*/
 asmlinkage int sys_tag_send(int tag, int level, char* buffer, size_t size){
 #endif
-    struct _tag_elem* msq;
-    unsigned long ret;
+
+
     //void* addr;
-    int err;
-    struct _tag_level_group* copy;
+
+
     printk("%s: send-params sys-call has been called %d %d %s %zu  \n",MODNAME,tag,level,buffer,size);
 //    p->level[level].awake=0;
 
@@ -719,7 +746,6 @@ asmlinkage int sys_tag_ctl(int tag, int command){
     //TODO PERMISSION CHECK
     //struct _tag_elem* p;
     //rcu_read_lock();
-    //p= check_and_get_tag_if_exists(tag);
     //rcu_read_unlock();
 
 
