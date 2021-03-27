@@ -984,7 +984,7 @@ static int sysvipc_proc_open(struct inode *inode, struct file *file)
 static int sysvipc_proc_release(struct inode *inode, struct file *file)
 {
 	struct seq_file *seq = file->private_data;
-	struct ipc_proc_iter *iter = seq->private;
+//	struct ipc_proc_iter *iter = seq->private;
 	//put_ipc_ns(iter->ns);
 	//iter->ids;
 	return seq_release_private(inode, file);

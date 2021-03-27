@@ -148,9 +148,102 @@ char* load_msg(char* buffer, int size){
 
     return addr;
 }
-void awake_all( int tag){
-    int i;
 
+int send_msg(int tag, int leve, char* buffer, size_t size){
+    void* addr;
+
+    addr = load_msg(buffer, size);
+
+    //GET TAG FROM IPC STRUCT
+    rcu_read_lock();
+
+    msq= check_and_get_tag_if_exists(tag);
+
+    if (IS_ERR(msq)) {
+        err = PTR_ERR(msq);
+        goto out_unlock1;
+    }
+
+    //INIZIO LAVORO PER SVEGLIARE I THREAD
+    //PRENDO IL LOCK SUL GROUP CAMBIO LA VISTA DEL PUNTATORE A GROUP
+
+    write_lock(&msq->level[level].level_lock);
+    int count = atomic_read();
+    if(count== -1 || count==1){
+        //NON CI SONO THREAD IN ATTESA
+        write_unlock(&msq->level[level].level_lock);
+        rcu_read_unlock();
+        return 1;
+    }
+
+    copy = msq->level[level].group;
+    msq->level[level].group = kmalloc(sizeof(struct _tag_level_group), GFP_KERNEL);
+    msq->level[level].group->awake = 1;
+    write_unlock(&msq->level[level].level_lock);
+    rcu_read_unlock();
+    //SCRIVO MEMORIA CONDIVISA
+//    mutex_lock(&log_get_mutex);
+    memcpy((char *) copy->kernel_buff, (char *) addr, size - ret);
+
+    copy->kernel_buff[size - ret] = '\0';
+    printk("%s: kernel buffer updated content is: %s\n", MODNAME, copy->kernel_buff);
+    //    valid = size - ret;
+//    mutex_unlock(&log_get_mutex);
+    free_pages((unsigned long) addr, 0);
+
+    //INFINE SVEGLIO I THREAD
+    copy->awake = 0;
+//        printk("%s numero thread %d\n",MODNAME,local_num_thread);
+    wake_up(&msq->level[level].my_queue);
+//    rcu_read_unlock();
+
+    //TODO devo implementare la parte che fa la free e aspetta che tutti i thread abbiano letto
+
+
+    return size - ret;
+
+
+    bad_size:
+    return -1;
+
+    out_unlock1:
+    rcu_read_unlock();
+    if (msq != NULL)
+        free_pages((unsigned long) addr, 0);
+    return err;
+}
+
+//GESTIONE THREAD
+struct global_data {
+    wait_queue_head_t wq;
+    atomic_t thread_count;
+    int tag;
+    int level;
+};
+
+
+wrapper_thread_send (global_data *gd) {
+    char* buff ;
+
+    buff= "\0";
+    if(send_msg(gf->tag, gf->level, buff, 0))
+    atomic_dec(&gd->server_threads);
+    wake_up(&gd->wq);
+}
+
+int awake_all(int tag){
+    struct global_data gd;
+    init_wait_queue_head(&gd.wq);
+    for(i=0; i!=32; i++){
+        atomic_inc(&gd.thread_count);
+        if (!(kthread_run(wrapper_thread_send, &gd)) {
+            atomic_dec(&gd.thread_count);
+            return -1;
+        }
+    }
+    wait_event_interruptible(&gd.wq, atomic_read(&gd.thread_count) == 0);
+    /* final cleanup */
+    return 1;
 }
 
 static void msg_rcu_free(struct rcu_head *head)
@@ -393,7 +486,7 @@ asmlinkage int sys_tag_send(int tag, int level, char* buffer, size_t size){
 #endif
     struct _tag_elem* msq;
     unsigned long ret;
-    void* addr;
+    //void* addr;
     int err;
     struct _tag_level_group* copy;
     printk("%s: send-params sys-call has been called %d %d %s %zu  \n",MODNAME,tag,level,buffer,size);
@@ -403,59 +496,9 @@ asmlinkage int sys_tag_send(int tag, int level, char* buffer, size_t size){
     //TODO CHECK SULLA PERMISSION
 
     //trade off tra sicurezza e velocità
-    if (size >= (MAX_MSG_SIZE - 1) || (long) size < 0 || tag < 0) goto bad_size;//leave 1 byte for string terminator
+    if (size >= (MAX_MSG_SIZE - 1) || (long) size < 0 || tag < 0 || level > 31 || level < 0) goto bad_size;//leave 1 byte for string terminator
 
-    addr = load_msg(buffer, size);
-
-    //GET TAG FROM IPC STRUCT
-    rcu_read_lock();
-
-    msq= check_and_get_tag_if_exists(tag);
-
-    if (IS_ERR(msq)) {
-        err = PTR_ERR(msq);
-        goto out_unlock1;
-    }
-
-    //INIZIO LAVORO PER SVEGLIARE I THREAD
-    //PRENDO IL LOCK SUL GROUP CAMBIO LA VISTA DEL PUNTATORE A GROUP
-
-    write_lock(&msq->level[level].level_lock);
-    copy = msq->level[level].group;
-    msq->level[level].group = kmalloc(sizeof(struct _tag_level_group), GFP_KERNEL);
-    msq->level[level].group->awake = 1;
-    write_unlock(&msq->level[level].level_lock);
-    rcu_read_unlock();
-    //SCRIVO MEMORIA CONDIVISA
-//    mutex_lock(&log_get_mutex);
-    memcpy((char *) copy->kernel_buff, (char *) addr, size - ret);
-
-    copy->kernel_buff[size - ret] = '\0';
-    printk("%s: kernel buffer updated content is: %s\n", MODNAME, copy->kernel_buff);
-    //    valid = size - ret;
-//    mutex_unlock(&log_get_mutex);
-    free_pages((unsigned long) addr, 0);
-
-    //INFINE SVEGLIO I THREAD
-    copy->awake = 0;
-//        printk("%s numero thread %d\n",MODNAME,local_num_thread);
-    wake_up(&msq->level[level].my_queue);
-//    rcu_read_unlock();
-
-    //TODO devo implementare la parte che fa la free e aspetta che tutti i thread abbiano letto
-
-
-    return size - ret;
-
-
-bad_size:
-    return -1;
-
-out_unlock1:
-    rcu_read_unlock();
-    if (msq != NULL)
-        free_pages((unsigned long) addr, 0);
-    return err;
+    return send_msg(tag, level, buffer, size);
 
 }
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
@@ -480,6 +523,11 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
     //packed_work *the_task;
 
     //TODO PERMISSION CHECK
+
+    //trade off tra sicurezza e velocità
+    if (size >= (MAX_MSG_SIZE - 1) || (long) size < 0 || tag < 0 || level > 31 || level < 0) goto bad_size;//leave 1 byte for string terminator
+
+
     rcu_read_lock();
     msq= check_and_get_tag_if_exists(tag);
     if (IS_ERR(msq)) {
@@ -657,8 +705,10 @@ asmlinkage int sys_tag_ctl(int tag, int command){
     //if (p!=NULL) {
     switch (command) {
         case AWAKE_ALL:
-            awake_all(tag);
-            printk("%s: awake all \n", MODNAME);
+            if(awake_all(tag) == -1){
+                printk("%s: awake all error \n", MODNAME);
+                return -1;
+            }
 
             break;
         case REMOVE:
