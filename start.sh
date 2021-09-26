@@ -1,5 +1,9 @@
 make
 sudo insmod the_data-exchange.ko
 cd user
-./a.out
-cd ..
+rm a.out
+gcc -o a.out user.c
+#./a.out
+#cd ..
+
+

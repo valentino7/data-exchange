@@ -182,6 +182,7 @@ int send_msg(int tag, int level, char* buffer, size_t size){
 
     addr = load_msg(buffer, size);
 
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //GET TAG FROM IPC STRUCT
     rcu_read_lock();
 
@@ -191,8 +192,11 @@ int send_msg(int tag, int level, char* buffer, size_t size){
         err = PTR_ERR(msq);
         goto out_unlock1;
     }
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //INIZIO LAVORO PER SVEGLIARE I THREAD
-    //PRENDO IL LOCK SUL GROUP CAMBIO LA VISTA DEL PUNTATORE A GROUP
+    //PRENDO IL LOCK DEL LIVELLO PER CAMBIARE LA VISTA DEL PUNTATORE A GROUP
     write_lock(&msq->level[level].level_lock);
     //controllo se il tag è stato eliminato
     int count = atomic_read(&msq->q_perm.refcount.refs);
@@ -207,6 +211,8 @@ int send_msg(int tag, int level, char* buffer, size_t size){
     msq->level[level].group = kmalloc(sizeof(struct _tag_level_group), GFP_KERNEL);
     msq->level[level].group->awake = 1;
     write_unlock(&msq->level[level].level_lock);
+
+
     rcu_read_unlock();
     //SCRIVO MEMORIA CONDIVISA
 //    mutex_lock(&log_get_mutex);
@@ -223,9 +229,6 @@ int send_msg(int tag, int level, char* buffer, size_t size){
 //        printk("%s numero thread %d\n",MODNAME,local_num_thread);
     wake_up(&msq->level[level].my_queue);
 //    rcu_read_unlock();
-
-    //TODO devo implementare la parte che fa la free e aspetta che tutti i thread abbiano letto
-
 
     return size - ret;
 
@@ -447,24 +450,21 @@ asmlinkage int sys_tag_get(int key, int command, int permission){
     int cmd_permission;
     struct ipc_params params;
 
+    printk("Sono dentro la tag_get");
     if (permission != RESTRICT && permission != NO_RESTRICT ){
         printk("%s: permission non valido %d\n",MODNAME,current->cred->euid);
         return -1;
     }
 
-
-
-//controllare se restrict
-//check se non è ne open ne esclusive
-//TODO valore di ritorno -1
-//todo allocare messaggio
-
     params.key=key;
     //shift di uno il command per salvare insieme anche le permission
     command = command <<1;
     cmd_permission = command + permission;
+    params.flg = cmd_permission;
+
+    printk("flag %d \n ", params.flg);
     result = ipcget(&params);
-    printk("risultato id %d \n ", result);
+    printk("ESCO DALLA TAG_GET, risultato id %d \n ", result);
     return result;
 
 
@@ -563,6 +563,12 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
 #endif
 
     struct _tag_elem * msq;
+    printk("tag_receive buffer: %s: \n", buffer);
+    printk("tag_receive size: %d: \n", size);
+    printk("tag_receive level: %d: \n", level);
+    printk("tag_receive tag: %d: \n", tag);
+
+
     struct _tag_level_group* copy;
     unsigned long ret;
     int err;
@@ -577,15 +583,22 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
 
 
     rcu_read_lock();
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //Viene acquisita la message queue se esiste
     msq= check_and_get_tag_if_exists(tag);
     if (IS_ERR(msq)) {
         //TODO USARE REFERENCE COUNT
-//        atomic_dec((atomic_t*)&msq->num_thread_per_tag);
-        printk("errore check and get");
+        //atomic_dec((atomic_t*)&msq->num_thread_per_tag);
+        printk("errore restituzione tag con rore: %d", IS_ERR(msq));
         rcu_read_unlock();
         return PTR_ERR(msq);
         // goto out_unlock;
     }
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //BLOCCO IN COMUNE CON CHI ELIMINA
 
     //serve read lock perchè se dealloco la struttura p, non posso piu accedere alla variabile lock
     //sezione critica condivisa con remover con contatore atomico per tag di accessi
@@ -599,6 +612,9 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
             return -1;
         }
     }
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
     /* raced with RMID? */
 //        if (!ipc_valid_object(&msq->q_perm)) {
 //            printk("errore ipc invalid");
@@ -608,6 +624,8 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
 //
 //            return err;
 //        }
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //INCREMENTO REF se va tutto bene
     if (!ipc_rcu_getref(&msq->q_perm)) {
         printk("errore ipc get ref");
@@ -629,19 +647,28 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
 //    msq->num_thread_per_tag++;
     //TODO attenzione ipc_unlock_object(&msq->q_perm);
 
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-    //COPIO AREA DI MEMORIA
+
+
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    //COPIATURA DELL'AREA DI MEMORIA
     read_lock(&msq->level[level].level_lock);
     copy = msq->level[level].group ;
+    //LETTURA E INCREMENTO NUMERO READERS PER IL GROUP PER IPLEMENTARE IL RILASCIO DELLA MEMORIA
+
+    atomic_inc((atomic_t*)&copy->num_thread);//a new reader
     read_unlock(&msq->level[level].level_lock);
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 
     //SBLOCCO LE AREE
 
-
-//        atomic_inc((atomic_t*)&p->level[level].num_thread);//a new sleeper
+    //atomic_inc((atomic_t*)&p->level[level].num_thread);//a new sleeper
     wait_event_interruptible(msq->level[level].my_queue, copy->awake == 0);
-//        spin_unlock(&p->level[level].level_lock);
+    //spin_unlock(&p->level[level].level_lock);
     if(copy->awake == 1){
         printk("%s: thread exiting sleep for signal\n",MODNAME);
         read_unlock(&msq->tag_lock);
@@ -655,14 +682,14 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
 
     //posso incrementare il reference anche qui perchè i tag non intaccano la memoria copiata
     //TODO da ragionare sulla posizione di questi rilasci
-    read_unlock(&msq->tag_lock);
+    //decremento il refcount
     ipc_rcu_putref(&msq->q_perm, msg_rcu_free);
+    read_unlock(&msq->tag_lock);
+    rcu_read_unlock();
 
-
+    /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //INIZIO LETTURA MEMORIA CONDIVISA
-    //TODO : LETTURA E INCREMENTO NUMERO READERS
 
-    // atomic_inc((atomic_t*)&copy->num_thread);//a new reader
 
     if(size > MAX_MSG_SIZE) goto bad_size;
 
@@ -671,9 +698,10 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
     if (addr == NULL) return -1;
 
 //    mutex_lock(&log_get_mutex);
-//    if (size > valid) size = valid;
     memcpy((char*)addr,(char*)copy->kernel_buff,size);
     printk("%s: SONO NELLA RECEIVE - %s\n",MODNAME,copy->kernel_buff);
+
+    atomic_dec((atomic_t*)&copy->num_thread)
 //    mutex_unlock(&log_get_mutex);
 
 
@@ -699,8 +727,11 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
  */
 //        the_task->code = request_code;
 
-    //TODO SLEEPER PER GROUP
-//    atomic_dec((atomic_t*)&copy->num_thread);//a new sleeper
+    //ULtimo chiude la porta (rimuove la memoria).
+    if(atomic_dec_and_test((atomic_t*)&copy->num_thread) ){
+        kfree(copy);
+        copy = NULL;
+    }//a new sleeper
 //    spin_lock(&copy->lock_presence_counter);
     /* if (copy->num_thread==0){
          the_task->buffer = copy;
@@ -708,7 +739,6 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
          schedule_work(&the_task->the_work);
      }*/
     //spin_unlock(&copy->lock_presence_counter);
-
 
 
 

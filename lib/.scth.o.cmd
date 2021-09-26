@@ -1,4 +1,4 @@
-cmd_/home/valentino/CLionProjects/data-exchange/lib/scth.o := gcc -Wp,-MMD,/home/valentino/CLionProjects/data-exchange/lib/.scth.o.d  -nostdinc -isystem /usr/lib/gcc/x86_64-linux-gnu/9/include  -I./arch/x86/include -I./arch/x86/include/generated  -I./include -I./arch/x86/include/uapi -I./arch/x86/include/generated/uapi -I./include/uapi -I./include/generated/uapi -include ./include/linux/kconfig.h -Iubuntu/include  -include ./include/linux/compiler_types.h -D__KERNEL__ -Wall -Wundef -Werror=strict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -fshort-wchar -fno-PIE -Werror=implicit-function-declaration -Werror=implicit-int -Wno-format-security -std=gnu89 -mno-sse -mno-mmx -mno-sse2 -mno-3dnow -mno-avx -m64 -falign-jumps=1 -falign-loops=1 -mno-80387 -mno-fp-ret-in-387 -mpreferred-stack-boundary=3 -mskip-rax-setup -mtune=generic -mno-red-zone -mcmodel=kernel -DCONFIG_X86_X32_ABI -Wno-sign-compare -fno-asynchronous-unwind-tables -mindirect-branch=thunk-extern -mindirect-branch-register -fno-jump-tables -fno-delete-null-pointer-checks -Wno-frame-address -Wno-format-truncation -Wno-format-overflow -Wno-address-of-packed-member -O2 --param=allow-store-data-races=0 -Wframe-larger-than=1024 -fstack-protector-strong -Wno-unused-but-set-variable -Wimplicit-fallthrough -Wno-unused-const-variable -fno-omit-frame-pointer -fno-optimize-sibling-calls -fno-var-tracking-assignments -pg -mrecord-mcount -mfentry -DCC_USING_FENTRY -Wdeclaration-after-statement -Wvla -Wno-pointer-sign -Wno-stringop-truncation -Wno-array-bounds -Wno-stringop-overflow -Wno-restrict -Wno-maybe-uninitialized -fno-strict-overflow -fno-merge-all-constants -fmerge-constants -fno-stack-check -fconserve-stack -Werror=date-time -Werror=incompatible-pointer-types -Werror=designated-init -fmacro-prefix-map=./= -fcf-protection=none -Wno-packed-not-aligned  -DMODULE  -DKBUILD_BASENAME='"scth"' -DKBUILD_MODNAME='"the_data_exchange"' -c -o /home/valentino/CLionProjects/data-exchange/lib/scth.o /home/valentino/CLionProjects/data-exchange/lib/scth.c
+cmd_/home/valentino/CLionProjects/data-exchange/lib/scth.o := gcc -Wp,-MMD,/home/valentino/CLionProjects/data-exchange/lib/.scth.o.d  -nostdinc -isystem /usr/lib/gcc/x86_64-linux-gnu/9/include  -I./arch/x86/include -I./arch/x86/include/generated  -I./include -I./arch/x86/include/uapi -I./arch/x86/include/generated/uapi -I./include/uapi -I./include/generated/uapi -include ./include/linux/kconfig.h -Iubuntu/include  -include ./include/linux/compiler_types.h -D__KERNEL__ -fmacro-prefix-map=./= -Wall -Wundef -Werror=strict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -fshort-wchar -fno-PIE -Werror=implicit-function-declaration -Werror=implicit-int -Werror=return-type -Wno-format-security -std=gnu89 -mno-sse -mno-mmx -mno-sse2 -mno-3dnow -mno-avx -fcf-protection=none -m64 -falign-jumps=1 -falign-loops=1 -mno-80387 -mno-fp-ret-in-387 -mpreferred-stack-boundary=3 -mskip-rax-setup -mtune=generic -mno-red-zone -mcmodel=kernel -DCONFIG_X86_X32_ABI -Wno-sign-compare -fno-asynchronous-unwind-tables -mindirect-branch=thunk-extern -mindirect-branch-register -fno-jump-tables -fno-delete-null-pointer-checks -Wno-frame-address -Wno-format-truncation -Wno-format-overflow -Wno-address-of-packed-member -O2 --param=allow-store-data-races=0 -Wframe-larger-than=1024 -fstack-protector-strong -Wimplicit-fallthrough -Wno-unused-but-set-variable -Wno-unused-const-variable -fno-omit-frame-pointer -fno-optimize-sibling-calls -gsplit-dwarf -gdwarf-4 -pg -mrecord-mcount -mfentry -DCC_USING_FENTRY -Wdeclaration-after-statement -Wvla -Wno-pointer-sign -Wno-stringop-truncation -Wno-array-bounds -Wno-stringop-overflow -Wno-restrict -Wno-maybe-uninitialized -fno-strict-overflow -fno-stack-check -fconserve-stack -Werror=date-time -Werror=incompatible-pointer-types -Werror=designated-init -Wno-packed-not-aligned  -DMODULE  -DKBUILD_BASENAME='"scth"' -DKBUILD_MODNAME='"the_data_exchange"' -c -o /home/valentino/CLionProjects/data-exchange/lib/scth.o /home/valentino/CLionProjects/data-exchange/lib/scth.c
 
 source_/home/valentino/CLionProjects/data-exchange/lib/scth.o := /home/valentino/CLionProjects/data-exchange/lib/scth.c
 
@@ -10,10 +10,10 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
     $(wildcard include/config/foo.h) \
   include/linux/compiler_types.h \
     $(wildcard include/config/have/arch/compiler/h.h) \
-    $(wildcard include/config/enable/must/check.h) \
     $(wildcard include/config/cc/has/asm/inline.h) \
   include/linux/compiler_attributes.h \
   include/linux/compiler-gcc.h \
+    $(wildcard include/config/arm64.h) \
     $(wildcard include/config/retpoline.h) \
     $(wildcard include/config/arch/use/builtin/bswap.h) \
   include/linux/module.h \
@@ -29,11 +29,13 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
     $(wildcard include/config/tracepoints.h) \
     $(wildcard include/config/tree/srcu.h) \
     $(wildcard include/config/bpf/events.h) \
+    $(wildcard include/config/debug/info/btf/modules.h) \
     $(wildcard include/config/jump/label.h) \
     $(wildcard include/config/tracing.h) \
     $(wildcard include/config/event/tracing.h) \
     $(wildcard include/config/ftrace/mcount/record.h) \
     $(wildcard include/config/kprobes.h) \
+    $(wildcard include/config/have/static/call/inline.h) \
     $(wildcard include/config/module/unload.h) \
     $(wildcard include/config/constructors.h) \
     $(wildcard include/config/function/error/injection.h) \
@@ -63,14 +65,12 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
   include/uapi/asm-generic/posix_types.h \
   include/linux/poison.h \
     $(wildcard include/config/illegal/pointer/value.h) \
-    $(wildcard include/config/page/poisoning/zero.h) \
   include/linux/const.h \
   include/vdso/const.h \
   include/uapi/linux/const.h \
   include/linux/kernel.h \
     $(wildcard include/config/preempt/voluntary.h) \
     $(wildcard include/config/debug/atomic/sleep.h) \
-    $(wildcard include/config/preempt/rt.h) \
     $(wildcard include/config/mmu.h) \
     $(wildcard include/config/prove/locking.h) \
     $(wildcard include/config/panic/timeout.h) \
@@ -89,30 +89,34 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
     $(wildcard include/config/trace/branch/profiling.h) \
     $(wildcard include/config/profile/all/branches.h) \
     $(wildcard include/config/stack/validation.h) \
-    $(wildcard include/config/debug/entry.h) \
-  arch/x86/include/asm/barrier.h \
-  arch/x86/include/asm/alternative.h \
-  arch/x86/include/asm/asm.h \
-  arch/x86/include/asm/nops.h \
-    $(wildcard include/config/mk7.h) \
-    $(wildcard include/config/x86/p6/nop.h) \
-    $(wildcard include/config/x86/64.h) \
-  include/asm-generic/barrier.h \
+  arch/x86/include/generated/asm/rwonce.h \
+  include/asm-generic/rwonce.h \
   include/linux/kasan-checks.h \
-    $(wildcard include/config/kasan.h) \
+    $(wildcard include/config/kasan/generic.h) \
+    $(wildcard include/config/kasan/sw/tags.h) \
   include/linux/kcsan-checks.h \
     $(wildcard include/config/kcsan.h) \
     $(wildcard include/config/kcsan/ignore/atomics.h) \
   arch/x86/include/asm/linkage.h \
+    $(wildcard include/config/x86/64.h) \
     $(wildcard include/config/x86/alignment/16.h) \
   include/linux/bitops.h \
   include/linux/bits.h \
   include/vdso/bits.h \
   include/linux/build_bug.h \
+  include/uapi/linux/kernel.h \
+  include/uapi/linux/sysinfo.h \
   arch/x86/include/asm/bitops.h \
     $(wildcard include/config/x86/cmov.h) \
+  arch/x86/include/asm/alternative.h \
+  arch/x86/include/asm/asm.h \
   arch/x86/include/asm/rmwcc.h \
     $(wildcard include/config/cc/has/asm/goto.h) \
+  arch/x86/include/asm/barrier.h \
+  arch/x86/include/asm/nops.h \
+    $(wildcard include/config/mk7.h) \
+    $(wildcard include/config/x86/p6/nop.h) \
+  include/asm-generic/barrier.h \
   include/asm-generic/bitops/find.h \
     $(wildcard include/config/generic/find/first/bit.h) \
   include/asm-generic/bitops/sched.h \
@@ -125,17 +129,19 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
     $(wildcard include/config/x86/cmpxchg64.h) \
     $(wildcard include/config/x86/use/3dnow.h) \
     $(wildcard include/config/matom.h) \
-    $(wildcard include/config/paravirt.h) \
+    $(wildcard include/config/paravirt/xxl.h) \
   arch/x86/include/asm/disabled-features.h \
     $(wildcard include/config/x86/smap.h) \
     $(wildcard include/config/x86/umip.h) \
     $(wildcard include/config/x86/intel/memory/protection/keys.h) \
     $(wildcard include/config/x86/5level.h) \
     $(wildcard include/config/page/table/isolation.h) \
+    $(wildcard include/config/x86/sgx.h) \
   include/asm-generic/bitops/const_hweight.h \
   include/asm-generic/bitops/instrumented-atomic.h \
   include/linux/instrumented.h \
   include/asm-generic/bitops/instrumented-non-atomic.h \
+    $(wildcard include/config/kcsan/assume/plain/writes/atomic.h) \
   include/asm-generic/bitops/instrumented-lock.h \
   include/asm-generic/bitops/le.h \
   arch/x86/include/uapi/asm/byteorder.h \
@@ -149,6 +155,10 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
   include/linux/log2.h \
     $(wildcard include/config/arch/has/ilog2/u32.h) \
     $(wildcard include/config/arch/has/ilog2/u64.h) \
+  include/linux/math.h \
+  arch/x86/include/asm/div64.h \
+  include/asm-generic/div64.h \
+  include/linux/minmax.h \
   include/linux/typecheck.h \
   include/linux/printk.h \
     $(wildcard include/config/message/loglevel/default.h) \
@@ -166,78 +176,62 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
   include/linux/kern_levels.h \
   include/linux/cache.h \
     $(wildcard include/config/arch/has/cache/line/size.h) \
-  include/uapi/linux/kernel.h \
-  include/uapi/linux/sysinfo.h \
   arch/x86/include/asm/cache.h \
     $(wildcard include/config/x86/l1/cache/shift.h) \
     $(wildcard include/config/x86/internode/cache/shift.h) \
     $(wildcard include/config/x86/vsmp.h) \
+  include/linux/ratelimit_types.h \
+  include/uapi/linux/param.h \
+  arch/x86/include/generated/uapi/asm/param.h \
+  include/asm-generic/param.h \
+    $(wildcard include/config/hz.h) \
+  include/uapi/asm-generic/param.h \
+  include/linux/spinlock_types.h \
+    $(wildcard include/config/debug/spinlock.h) \
+    $(wildcard include/config/debug/lock/alloc.h) \
+  arch/x86/include/asm/spinlock_types.h \
+  include/asm-generic/qspinlock_types.h \
+    $(wildcard include/config/nr/cpus.h) \
+  include/asm-generic/qrwlock_types.h \
+  include/linux/lockdep_types.h \
+    $(wildcard include/config/prove/raw/lock/nesting.h) \
+    $(wildcard include/config/preempt/lock.h) \
+    $(wildcard include/config/lockdep.h) \
+    $(wildcard include/config/lock/stat.h) \
+  include/linux/rwlock_types.h \
   include/linux/dynamic_debug.h \
   include/linux/jump_label.h \
     $(wildcard include/config/have/arch/jump/label/relative.h) \
   arch/x86/include/asm/jump_label.h \
-  arch/x86/include/asm/div64.h \
-  include/asm-generic/div64.h \
   include/linux/stat.h \
   arch/x86/include/uapi/asm/stat.h \
   include/uapi/linux/stat.h \
   include/linux/time.h \
-    $(wildcard include/config/arch/uses/gettimeoffset.h) \
     $(wildcard include/config/posix/timers.h) \
-  include/linux/seqlock.h \
-    $(wildcard include/config/debug/lock/alloc.h) \
-  include/linux/spinlock.h \
-    $(wildcard include/config/debug/spinlock.h) \
-    $(wildcard include/config/preemption.h) \
-  include/linux/preempt.h \
-    $(wildcard include/config/preempt/count.h) \
-    $(wildcard include/config/debug/preempt.h) \
-    $(wildcard include/config/trace/preempt/toggle.h) \
-    $(wildcard include/config/preempt/notifiers.h) \
-  arch/x86/include/asm/preempt.h \
-  arch/x86/include/asm/percpu.h \
-    $(wildcard include/config/x86/64/smp.h) \
-  include/asm-generic/percpu.h \
-    $(wildcard include/config/have/setup/per/cpu/area.h) \
-  include/linux/threads.h \
-    $(wildcard include/config/nr/cpus.h) \
-    $(wildcard include/config/base/small.h) \
-  include/linux/percpu-defs.h \
-    $(wildcard include/config/debug/force/weak/per/cpu.h) \
-    $(wildcard include/config/amd/mem/encrypt.h) \
-  include/linux/thread_info.h \
-    $(wildcard include/config/thread/info/in/task.h) \
-    $(wildcard include/config/have/arch/within/stack/frames.h) \
-    $(wildcard include/config/hardened/usercopy.h) \
-  include/linux/bug.h \
-    $(wildcard include/config/bug/on/data/corruption.h) \
-  arch/x86/include/asm/bug.h \
-    $(wildcard include/config/debug/bugverbose.h) \
-  include/asm-generic/bug.h \
-    $(wildcard include/config/bug.h) \
-    $(wildcard include/config/generic/bug/relative/pointers.h) \
-  include/linux/restart_block.h \
-  include/linux/time64.h \
   include/linux/math64.h \
     $(wildcard include/config/arch/supports/int128.h) \
   include/vdso/math64.h \
+  include/linux/time64.h \
   include/vdso/time64.h \
   include/uapi/linux/time.h \
   include/uapi/linux/time_types.h \
-  arch/x86/include/asm/current.h \
-  arch/x86/include/asm/thread_info.h \
-    $(wildcard include/config/vm86.h) \
+  include/linux/time32.h \
+  include/linux/timex.h \
+  include/uapi/linux/timex.h \
+  arch/x86/include/asm/timex.h \
+  arch/x86/include/asm/processor.h \
+    $(wildcard include/config/x86/vmx/feature/names.h) \
     $(wildcard include/config/x86/iopl/ioperm.h) \
-    $(wildcard include/config/frame/pointer.h) \
-    $(wildcard include/config/compat.h) \
-    $(wildcard include/config/ia32/emulation.h) \
-  arch/x86/include/asm/page.h \
-  arch/x86/include/asm/page_types.h \
-    $(wildcard include/config/physical/start.h) \
-    $(wildcard include/config/physical/align.h) \
-    $(wildcard include/config/dynamic/physical/mask.h) \
+    $(wildcard include/config/stackprotector.h) \
+    $(wildcard include/config/vm86.h) \
+    $(wildcard include/config/x86/debugctlmsr.h) \
+    $(wildcard include/config/cpu/sup/amd.h) \
+    $(wildcard include/config/xen.h) \
+  arch/x86/include/asm/processor-flags.h \
+  arch/x86/include/uapi/asm/processor-flags.h \
   include/linux/mem_encrypt.h \
     $(wildcard include/config/arch/has/mem/encrypt.h) \
+    $(wildcard include/config/amd/mem/encrypt.h) \
   arch/x86/include/asm/mem_encrypt.h \
   arch/x86/include/uapi/asm/bootparam.h \
   include/linux/screen_info.h \
@@ -255,11 +249,59 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
   include/video/edid.h \
     $(wildcard include/config/x86.h) \
   include/uapi/video/edid.h \
+  arch/x86/include/asm/math_emu.h \
+  arch/x86/include/asm/ptrace.h \
+    $(wildcard include/config/paravirt.h) \
+    $(wildcard include/config/ia32/emulation.h) \
+  arch/x86/include/asm/segment.h \
+    $(wildcard include/config/xen/pv.h) \
+    $(wildcard include/config/x86/32/lazy/gs.h) \
+  arch/x86/include/asm/page_types.h \
+    $(wildcard include/config/physical/start.h) \
+    $(wildcard include/config/physical/align.h) \
+    $(wildcard include/config/dynamic/physical/mask.h) \
   arch/x86/include/asm/page_64_types.h \
+    $(wildcard include/config/kasan.h) \
     $(wildcard include/config/dynamic/memory/layout.h) \
     $(wildcard include/config/randomize/base.h) \
   arch/x86/include/asm/kaslr.h \
     $(wildcard include/config/randomize/memory.h) \
+  arch/x86/include/uapi/asm/ptrace.h \
+  arch/x86/include/uapi/asm/ptrace-abi.h \
+  arch/x86/include/asm/paravirt_types.h \
+    $(wildcard include/config/pgtable/levels.h) \
+    $(wildcard include/config/paravirt/debug.h) \
+  arch/x86/include/asm/desc_defs.h \
+  arch/x86/include/asm/pgtable_types.h \
+    $(wildcard include/config/mem/soft/dirty.h) \
+    $(wildcard include/config/have/arch/userfaultfd/wp.h) \
+    $(wildcard include/config/proc/fs.h) \
+  arch/x86/include/asm/pgtable_64_types.h \
+    $(wildcard include/config/debug/kmap/local/force/map.h) \
+  arch/x86/include/asm/sparsemem.h \
+    $(wildcard include/config/sparsemem.h) \
+    $(wildcard include/config/numa/keep/meminfo.h) \
+  arch/x86/include/asm/nospec-branch.h \
+  include/linux/static_key.h \
+  include/linux/objtool.h \
+  arch/x86/include/asm/alternative-asm.h \
+  arch/x86/include/asm/msr-index.h \
+  arch/x86/include/asm/unwind_hints.h \
+  arch/x86/include/asm/orc_types.h \
+  arch/x86/include/asm/proto.h \
+  arch/x86/include/uapi/asm/ldt.h \
+  arch/x86/include/uapi/asm/sigcontext.h \
+  arch/x86/include/asm/current.h \
+  arch/x86/include/asm/percpu.h \
+    $(wildcard include/config/x86/64/smp.h) \
+  include/asm-generic/percpu.h \
+    $(wildcard include/config/debug/preempt.h) \
+    $(wildcard include/config/have/setup/per/cpu/area.h) \
+  include/linux/threads.h \
+    $(wildcard include/config/base/small.h) \
+  include/linux/percpu-defs.h \
+    $(wildcard include/config/debug/force/weak/per/cpu.h) \
+  arch/x86/include/asm/page.h \
   arch/x86/include/asm/page_64.h \
     $(wildcard include/config/debug/virtual.h) \
     $(wildcard include/config/flatmem.h) \
@@ -268,52 +310,8 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
   include/asm-generic/memory_model.h \
     $(wildcard include/config/discontigmem.h) \
     $(wildcard include/config/sparsemem/vmemmap.h) \
-    $(wildcard include/config/sparsemem.h) \
   include/linux/pfn.h \
   include/asm-generic/getorder.h \
-  arch/x86/include/asm/cpufeature.h \
-    $(wildcard include/config/x86/feature/names.h) \
-  arch/x86/include/asm/processor.h \
-    $(wildcard include/config/x86/vmx/feature/names.h) \
-    $(wildcard include/config/kvm.h) \
-    $(wildcard include/config/stackprotector.h) \
-    $(wildcard include/config/paravirt/xxl.h) \
-    $(wildcard include/config/x86/debugctlmsr.h) \
-    $(wildcard include/config/cpu/sup/amd.h) \
-    $(wildcard include/config/xen.h) \
-  arch/x86/include/asm/processor-flags.h \
-  arch/x86/include/uapi/asm/processor-flags.h \
-  arch/x86/include/asm/math_emu.h \
-  arch/x86/include/asm/ptrace.h \
-  arch/x86/include/asm/segment.h \
-    $(wildcard include/config/xen/pv.h) \
-    $(wildcard include/config/x86/32/lazy/gs.h) \
-  arch/x86/include/uapi/asm/ptrace.h \
-  arch/x86/include/uapi/asm/ptrace-abi.h \
-  arch/x86/include/asm/paravirt_types.h \
-    $(wildcard include/config/pgtable/levels.h) \
-    $(wildcard include/config/paravirt/debug.h) \
-  arch/x86/include/asm/desc_defs.h \
-  arch/x86/include/asm/kmap_types.h \
-    $(wildcard include/config/debug/highmem.h) \
-  include/asm-generic/kmap_types.h \
-  arch/x86/include/asm/pgtable_types.h \
-    $(wildcard include/config/mem/soft/dirty.h) \
-    $(wildcard include/config/have/arch/userfaultfd/wp.h) \
-    $(wildcard include/config/proc/fs.h) \
-  arch/x86/include/asm/pgtable_64_types.h \
-  arch/x86/include/asm/sparsemem.h \
-  arch/x86/include/asm/nospec-branch.h \
-  include/linux/static_key.h \
-  include/linux/frame.h \
-  arch/x86/include/asm/alternative-asm.h \
-  arch/x86/include/asm/msr-index.h \
-  arch/x86/include/asm/unwind_hints.h \
-  arch/x86/include/asm/orc_types.h \
-  arch/x86/include/asm/spinlock_types.h \
-  include/asm-generic/qspinlock_types.h \
-  include/asm-generic/qrwlock_types.h \
-  arch/x86/include/uapi/asm/sigcontext.h \
   arch/x86/include/asm/msr.h \
   arch/x86/include/asm/msr-index.h \
   arch/x86/include/generated/uapi/asm/errno.h \
@@ -328,6 +326,8 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
   include/linux/string.h \
     $(wildcard include/config/binary/printf.h) \
     $(wildcard include/config/fortify/source.h) \
+  include/linux/errno.h \
+  include/uapi/linux/errno.h \
   include/uapi/linux/string.h \
   arch/x86/include/asm/string.h \
   arch/x86/include/asm/string_64.h \
@@ -341,11 +341,21 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
     $(wildcard include/config/generic/atomic64.h) \
   include/asm-generic/atomic-instrumented.h \
   include/asm-generic/atomic-long.h \
+  include/linux/bug.h \
+    $(wildcard include/config/bug/on/data/corruption.h) \
+  arch/x86/include/asm/bug.h \
+    $(wildcard include/config/debug/bugverbose.h) \
+  include/linux/instrumentation.h \
+    $(wildcard include/config/debug/entry.h) \
+  include/asm-generic/bug.h \
+    $(wildcard include/config/bug.h) \
+    $(wildcard include/config/generic/bug/relative/pointers.h) \
   arch/x86/include/uapi/asm/msr.h \
   include/linux/tracepoint-defs.h \
   arch/x86/include/asm/paravirt.h \
     $(wildcard include/config/paravirt/spinlocks.h) \
   arch/x86/include/asm/frame.h \
+    $(wildcard include/config/frame/pointer.h) \
   arch/x86/include/asm/special_insns.h \
   include/linux/irqflags.h \
     $(wildcard include/config/trace/irqflags.h) \
@@ -359,17 +369,77 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
   include/linux/personality.h \
   include/uapi/linux/personality.h \
   include/linux/err.h \
+  arch/x86/include/asm/tsc.h \
+    $(wildcard include/config/x86/tsc.h) \
+  arch/x86/include/asm/cpufeature.h \
+    $(wildcard include/config/x86/feature/names.h) \
+  include/vdso/time32.h \
+  include/vdso/time.h \
+  include/linux/uidgid.h \
+    $(wildcard include/config/multiuser.h) \
+    $(wildcard include/config/user/ns.h) \
+  include/linux/highuid.h \
+  include/linux/kmod.h \
+  include/linux/umh.h \
+  include/linux/gfp.h \
+    $(wildcard include/config/highmem.h) \
+    $(wildcard include/config/zone/dma.h) \
+    $(wildcard include/config/zone/dma32.h) \
+    $(wildcard include/config/zone/device.h) \
+    $(wildcard include/config/numa.h) \
+    $(wildcard include/config/pm/sleep.h) \
+    $(wildcard include/config/contig/alloc.h) \
+    $(wildcard include/config/cma.h) \
+  include/linux/mmdebug.h \
+    $(wildcard include/config/debug/vm.h) \
+    $(wildcard include/config/debug/vm/pgflags.h) \
+  include/linux/mmzone.h \
+    $(wildcard include/config/force/max/zoneorder.h) \
+    $(wildcard include/config/memory/isolation.h) \
+    $(wildcard include/config/zsmalloc.h) \
+    $(wildcard include/config/shadow/call/stack.h) \
+    $(wildcard include/config/memcg.h) \
+    $(wildcard include/config/memory/hotplug.h) \
+    $(wildcard include/config/compaction.h) \
+    $(wildcard include/config/transparent/hugepage.h) \
+    $(wildcard include/config/flat/node/mem/map.h) \
+    $(wildcard include/config/page/extension.h) \
+    $(wildcard include/config/deferred/struct/page/init.h) \
+    $(wildcard include/config/have/memoryless/nodes.h) \
+    $(wildcard include/config/need/multiple/nodes.h) \
+    $(wildcard include/config/sparsemem/extreme.h) \
+    $(wildcard include/config/memory/hotremove.h) \
+    $(wildcard include/config/have/arch/pfn/valid.h) \
+    $(wildcard include/config/holes/in/zone.h) \
+  include/linux/spinlock.h \
+    $(wildcard include/config/preemption.h) \
+  include/linux/preempt.h \
+    $(wildcard include/config/preempt/count.h) \
+    $(wildcard include/config/trace/preempt/toggle.h) \
+    $(wildcard include/config/preempt/notifiers.h) \
+  arch/x86/include/asm/preempt.h \
+  include/linux/thread_info.h \
+    $(wildcard include/config/thread/info/in/task.h) \
+    $(wildcard include/config/generic/entry.h) \
+    $(wildcard include/config/have/arch/within/stack/frames.h) \
+    $(wildcard include/config/hardened/usercopy.h) \
+  include/linux/restart_block.h \
+  arch/x86/include/asm/thread_info.h \
+    $(wildcard include/config/compat.h) \
   include/linux/bottom_half.h \
+  include/linux/lockdep.h \
+    $(wildcard include/config/debug/locking/api/selftests.h) \
+  include/linux/smp.h \
+    $(wildcard include/config/up/late/init.h) \
+  include/linux/smp_types.h \
+  include/linux/llist.h \
+    $(wildcard include/config/arch/have/nmi/safe/cmpxchg.h) \
+  arch/x86/include/asm/smp.h \
+    $(wildcard include/config/x86/local/apic.h) \
+    $(wildcard include/config/debug/nmi/selftest.h) \
   arch/x86/include/generated/asm/mmiowb.h \
   include/asm-generic/mmiowb.h \
     $(wildcard include/config/mmiowb.h) \
-  include/linux/spinlock_types.h \
-  include/linux/lockdep.h \
-    $(wildcard include/config/prove/raw/lock/nesting.h) \
-    $(wildcard include/config/preempt/lock.h) \
-    $(wildcard include/config/lockdep.h) \
-    $(wildcard include/config/lock/stat.h) \
-  include/linux/rwlock_types.h \
   arch/x86/include/asm/spinlock.h \
   arch/x86/include/asm/qspinlock.h \
   include/asm-generic/qspinlock.h \
@@ -408,69 +478,26 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
     $(wildcard include/config/inline/write/unlock/irq.h) \
     $(wildcard include/config/inline/read/unlock/irqrestore.h) \
     $(wildcard include/config/inline/write/unlock/irqrestore.h) \
-  include/linux/time32.h \
-  include/linux/timex.h \
-  include/uapi/linux/timex.h \
-  include/uapi/linux/param.h \
-  arch/x86/include/generated/uapi/asm/param.h \
-  include/asm-generic/param.h \
-    $(wildcard include/config/hz.h) \
-  include/uapi/asm-generic/param.h \
-  arch/x86/include/asm/timex.h \
-  arch/x86/include/asm/tsc.h \
-    $(wildcard include/config/x86/tsc.h) \
-  include/vdso/time32.h \
-  include/vdso/time.h \
-  include/linux/uidgid.h \
-    $(wildcard include/config/multiuser.h) \
-    $(wildcard include/config/user/ns.h) \
-  include/linux/highuid.h \
-  include/linux/kmod.h \
-  include/linux/umh.h \
-  include/linux/gfp.h \
-    $(wildcard include/config/highmem.h) \
-    $(wildcard include/config/zone/dma.h) \
-    $(wildcard include/config/zone/dma32.h) \
-    $(wildcard include/config/zone/device.h) \
-    $(wildcard include/config/numa.h) \
-    $(wildcard include/config/pm/sleep.h) \
-    $(wildcard include/config/contig/alloc.h) \
-    $(wildcard include/config/cma.h) \
-  include/linux/mmdebug.h \
-    $(wildcard include/config/debug/vm.h) \
-    $(wildcard include/config/debug/vm/pgflags.h) \
-  include/linux/mmzone.h \
-    $(wildcard include/config/force/max/zoneorder.h) \
-    $(wildcard include/config/memory/isolation.h) \
-    $(wildcard include/config/shadow/call/stack.h) \
-    $(wildcard include/config/zsmalloc.h) \
-    $(wildcard include/config/memcg.h) \
-    $(wildcard include/config/memory/hotplug.h) \
-    $(wildcard include/config/compaction.h) \
-    $(wildcard include/config/transparent/hugepage.h) \
-    $(wildcard include/config/flat/node/mem/map.h) \
-    $(wildcard include/config/page/extension.h) \
-    $(wildcard include/config/deferred/struct/page/init.h) \
-    $(wildcard include/config/have/memory/present.h) \
-    $(wildcard include/config/have/memoryless/nodes.h) \
-    $(wildcard include/config/need/multiple/nodes.h) \
-    $(wildcard include/config/sparsemem/extreme.h) \
-    $(wildcard include/config/memory/hotremove.h) \
-    $(wildcard include/config/have/arch/pfn/valid.h) \
-    $(wildcard include/config/holes/in/zone.h) \
-    $(wildcard include/config/arch/has/holes/memorymodel.h) \
   include/linux/wait.h \
   include/uapi/linux/wait.h \
   include/linux/numa.h \
     $(wildcard include/config/nodes/shift.h) \
-    $(wildcard include/config/numa/keep/meminfo.h) \
+  include/linux/seqlock.h \
+    $(wildcard include/config/preempt/rt.h) \
+  include/linux/mutex.h \
+    $(wildcard include/config/mutex/spin/on/owner.h) \
+    $(wildcard include/config/debug/mutexes.h) \
+  include/linux/osq_lock.h \
+  include/linux/debug_locks.h \
+  include/linux/ww_mutex.h \
+    $(wildcard include/config/debug/ww/mutex/slowpath.h) \
   include/linux/nodemask.h \
   include/linux/pageblock-flags.h \
     $(wildcard include/config/hugetlb/page.h) \
     $(wildcard include/config/hugetlb/page/size/variable.h) \
   include/linux/page-flags-layout.h \
     $(wildcard include/config/numa/balancing.h) \
-    $(wildcard include/config/kasan/sw/tags.h) \
+    $(wildcard include/config/kasan/hw/tags.h) \
   include/generated/bounds.h \
   include/linux/mm_types.h \
     $(wildcard include/config/have/aligned/struct/page.h) \
@@ -481,6 +508,7 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
     $(wildcard include/config/aio.h) \
     $(wildcard include/config/mmu/notifier.h) \
     $(wildcard include/config/arch/want/batched/unmap/tlb/flush.h) \
+    $(wildcard include/config/iommu/support.h) \
   include/linux/mm_types_task.h \
     $(wildcard include/config/split/ptlock/cpus.h) \
     $(wildcard include/config/arch/enable/split/pmd/ptlock.h) \
@@ -491,15 +519,15 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
   include/linux/rbtree.h \
   include/linux/rcupdate.h \
     $(wildcard include/config/preempt/rcu.h) \
+    $(wildcard include/config/tiny/rcu.h) \
+    $(wildcard include/config/tasks/rcu/generic.h) \
     $(wildcard include/config/rcu/stall/common.h) \
     $(wildcard include/config/no/hz/full.h) \
     $(wildcard include/config/rcu/nocb/cpu.h) \
-    $(wildcard include/config/tasks/rcu/generic.h) \
     $(wildcard include/config/tasks/rcu.h) \
     $(wildcard include/config/tasks/rcu/trace.h) \
     $(wildcard include/config/tasks/rude/rcu.h) \
     $(wildcard include/config/tree/rcu.h) \
-    $(wildcard include/config/tiny/rcu.h) \
     $(wildcard include/config/debug/objects/rcu/head.h) \
     $(wildcard include/config/prove/rcu.h) \
     $(wildcard include/config/rcu/boost.h) \
@@ -508,20 +536,12 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
   include/linux/rwsem.h \
     $(wildcard include/config/rwsem/spin/on/owner.h) \
     $(wildcard include/config/debug/rwsems.h) \
-  include/linux/osq_lock.h \
   include/linux/completion.h \
   include/linux/swait.h \
   include/linux/uprobes.h \
     $(wildcard include/config/uprobes.h) \
-  include/linux/errno.h \
-  include/uapi/linux/errno.h \
   arch/x86/include/asm/uprobes.h \
   include/linux/notifier.h \
-  include/linux/mutex.h \
-    $(wildcard include/config/mutex/spin/on/owner.h) \
-    $(wildcard include/config/debug/mutexes.h) \
-  include/linux/debug_locks.h \
-    $(wildcard include/config/debug/locking/api/selftests.h) \
   include/linux/srcu.h \
     $(wildcard include/config/tiny/srcu.h) \
     $(wildcard include/config/srcu.h) \
@@ -538,7 +558,7 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
   include/generated/timeconst.h \
   include/vdso/ktime.h \
   include/linux/timekeeping.h \
-  include/linux/timekeeping32.h \
+    $(wildcard include/config/generic/cmos/update.h) \
   include/linux/debugobjects.h \
     $(wildcard include/config/debug/objects.h) \
     $(wildcard include/config/debug/objects/free.h) \
@@ -561,47 +581,6 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
     $(wildcard include/config/have/bootmem/info/node.h) \
   arch/x86/include/asm/mmzone.h \
   arch/x86/include/asm/mmzone_64.h \
-  arch/x86/include/asm/smp.h \
-    $(wildcard include/config/x86/local/apic.h) \
-    $(wildcard include/config/x86/io/apic.h) \
-    $(wildcard include/config/debug/nmi/selftest.h) \
-  arch/x86/include/asm/mpspec.h \
-    $(wildcard include/config/eisa.h) \
-    $(wildcard include/config/x86/mpparse.h) \
-  arch/x86/include/asm/mpspec_def.h \
-  arch/x86/include/asm/x86_init.h \
-  arch/x86/include/asm/apicdef.h \
-  arch/x86/include/asm/apic.h \
-    $(wildcard include/config/x86/x2apic.h) \
-  arch/x86/include/asm/fixmap.h \
-    $(wildcard include/config/provide/ohci1394/dma/init.h) \
-    $(wildcard include/config/pci/mmconfig.h) \
-    $(wildcard include/config/x86/intel/mid.h) \
-    $(wildcard include/config/acpi/apei/ghes.h) \
-    $(wildcard include/config/intel/txt.h) \
-  arch/x86/include/asm/acpi.h \
-    $(wildcard include/config/acpi/apei.h) \
-    $(wildcard include/config/acpi.h) \
-    $(wildcard include/config/acpi/numa.h) \
-  include/acpi/pdc_intel.h \
-  arch/x86/include/asm/numa.h \
-    $(wildcard include/config/numa/emu.h) \
-  arch/x86/include/asm/topology.h \
-    $(wildcard include/config/sched/mc/prio.h) \
-  include/asm-generic/topology.h \
-  arch/x86/include/uapi/asm/vsyscall.h \
-  include/asm-generic/fixmap.h \
-  arch/x86/include/asm/hardirq.h \
-    $(wildcard include/config/kvm/intel.h) \
-    $(wildcard include/config/have/kvm.h) \
-    $(wildcard include/config/x86/thermal/vector.h) \
-    $(wildcard include/config/x86/mce/threshold.h) \
-    $(wildcard include/config/x86/mce/amd.h) \
-    $(wildcard include/config/x86/hv/callback/vector.h) \
-    $(wildcard include/config/hyperv.h) \
-  arch/x86/include/asm/io_apic.h \
-  arch/x86/include/asm/irq_vectors.h \
-    $(wildcard include/config/pci/msi.h) \
   include/linux/topology.h \
     $(wildcard include/config/use/percpu/numa/node/id.h) \
     $(wildcard include/config/sched/smt.h) \
@@ -610,11 +589,16 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
   include/linux/percpu.h \
     $(wildcard include/config/need/per/cpu/embed/first/chunk.h) \
     $(wildcard include/config/need/per/cpu/page/first/chunk.h) \
-  include/linux/smp.h \
-    $(wildcard include/config/up/late/init.h) \
-  include/linux/smp_types.h \
-  include/linux/llist.h \
-    $(wildcard include/config/arch/have/nmi/safe/cmpxchg.h) \
+  arch/x86/include/asm/topology.h \
+    $(wildcard include/config/sched/mc/prio.h) \
+    $(wildcard include/config/acpi/cppc/lib.h) \
+  arch/x86/include/asm/mpspec.h \
+    $(wildcard include/config/eisa.h) \
+    $(wildcard include/config/x86/mpparse.h) \
+  arch/x86/include/asm/mpspec_def.h \
+  arch/x86/include/asm/x86_init.h \
+  arch/x86/include/asm/apicdef.h \
+  include/asm-generic/topology.h \
   include/linux/sysctl.h \
     $(wildcard include/config/sysctl.h) \
   include/uapi/linux/sysctl.h \
@@ -651,6 +635,8 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
   include/linux/rbtree_latch.h \
   include/linux/error-injection.h \
   include/asm-generic/error-injection.h \
+  include/linux/static_call_types.h \
+    $(wildcard include/config/have/static/call.h) \
   arch/x86/include/asm/module.h \
     $(wildcard include/config/unwinder/orc.h) \
   include/asm-generic/module.h \
@@ -669,13 +655,13 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
     $(wildcard include/config/fs/encryption.h) \
     $(wildcard include/config/fs/verity.h) \
     $(wildcard include/config/epoll.h) \
+    $(wildcard include/config/unicode.h) \
     $(wildcard include/config/quota.h) \
     $(wildcard include/config/blk/dev/loop.h) \
     $(wildcard include/config/fs/dax.h) \
-    $(wildcard include/config/block.h) \
     $(wildcard include/config/mandatory/file/locking.h) \
+    $(wildcard include/config/block.h) \
     $(wildcard include/config/migration.h) \
-    $(wildcard include/config/io/uring.h) \
   include/linux/wait_bit.h \
   include/linux/kdev_t.h \
   include/uapi/linux/kdev_t.h \
@@ -729,8 +715,10 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
     $(wildcard include/config/schedstats.h) \
     $(wildcard include/config/fair/group/sched.h) \
     $(wildcard include/config/rt/group/sched.h) \
+    $(wildcard include/config/rt/mutexes.h) \
     $(wildcard include/config/uclamp/task.h) \
     $(wildcard include/config/uclamp/buckets/count.h) \
+    $(wildcard include/config/kmap/local.h) \
     $(wildcard include/config/cgroup/sched.h) \
     $(wildcard include/config/blk/dev/io/trace.h) \
     $(wildcard include/config/tasks/trace/rcu.h) \
@@ -741,12 +729,14 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
     $(wildcard include/config/arch/has/scaled/cputime.h) \
     $(wildcard include/config/virt/cpu/accounting/gen.h) \
     $(wildcard include/config/posix/cputimers.h) \
+    $(wildcard include/config/posix/cpu/timers/task/work.h) \
     $(wildcard include/config/keys.h) \
     $(wildcard include/config/sysvipc.h) \
     $(wildcard include/config/detect/hung/task.h) \
+    $(wildcard include/config/io/uring.h) \
     $(wildcard include/config/auditsyscall.h) \
-    $(wildcard include/config/rt/mutexes.h) \
     $(wildcard include/config/ubsan.h) \
+    $(wildcard include/config/ubsan/trap.h) \
     $(wildcard include/config/task/xacct.h) \
     $(wildcard include/config/cpusets.h) \
     $(wildcard include/config/x86/cpu/resctrl.h) \
@@ -756,12 +746,14 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
     $(wildcard include/config/task/delay/acct.h) \
     $(wildcard include/config/fault/injection.h) \
     $(wildcard include/config/latencytop.h) \
+    $(wildcard include/config/kunit.h) \
     $(wildcard include/config/function/graph/tracer.h) \
     $(wildcard include/config/kcov.h) \
     $(wildcard include/config/bcache.h) \
     $(wildcard include/config/vmap/stack.h) \
     $(wildcard include/config/gcc/plugin/stackleak.h) \
     $(wildcard include/config/x86/mce.h) \
+    $(wildcard include/config/kretprobes.h) \
     $(wildcard include/config/arch/task/struct/on/stack.h) \
     $(wildcard include/config/debug/rseq.h) \
   include/uapi/linux/sched.h \
@@ -794,6 +786,7 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
     $(wildcard include/config/have/arch/seccomp/filter.h) \
     $(wildcard include/config/seccomp/filter.h) \
     $(wildcard include/config/checkpoint/restore.h) \
+    $(wildcard include/config/seccomp/cache/debug.h) \
   include/uapi/linux/seccomp.h \
   arch/x86/include/asm/seccomp.h \
   arch/x86/include/asm/unistd.h \
@@ -812,21 +805,30 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
   include/linux/latencytop.h \
   include/linux/sched/prio.h \
   include/linux/sched/types.h \
+  include/linux/syscall_user_dispatch.h \
   include/linux/task_io_accounting.h \
     $(wildcard include/config/task/io/accounting.h) \
   include/linux/posix-timers.h \
   include/linux/alarmtimer.h \
     $(wildcard include/config/rtc/class.h) \
+  include/linux/task_work.h \
   include/uapi/linux/rseq.h \
   include/linux/kcsan.h \
+  arch/x86/include/generated/asm/kmap_size.h \
+  include/asm-generic/kmap_size.h \
+    $(wildcard include/config/debug/kmap/local.h) \
   include/linux/sched/jobctl.h \
   include/linux/sched/task.h \
-    $(wildcard include/config/have/copy/thread/tls.h) \
     $(wildcard include/config/have/exit/thread.h) \
     $(wildcard include/config/arch/wants/dynamic/task/struct.h) \
     $(wildcard include/config/have/arch/thread/struct/whitelist.h) \
   include/linux/uaccess.h \
+    $(wildcard include/config/set/fs.h) \
+  include/linux/fault-inject-usercopy.h \
+    $(wildcard include/config/fault/injection/usercopy.h) \
   arch/x86/include/asm/uaccess.h \
+    $(wildcard include/config/cc/has/asm/goto/output.h) \
+    $(wildcard include/config/cc/asm/goto/output.h) \
     $(wildcard include/config/arch/has/copy/mc.h) \
     $(wildcard include/config/x86/intel/usercopy.h) \
   arch/x86/include/asm/smap.h \
@@ -868,18 +870,30 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
   include/linux/cdev.h \
   include/linux/device.h \
     $(wildcard include/config/debug/devres.h) \
+    $(wildcard include/config/energy/model.h) \
     $(wildcard include/config/generic/msi/irq/domain.h) \
     $(wildcard include/config/pinctrl.h) \
     $(wildcard include/config/generic/msi/irq.h) \
+    $(wildcard include/config/dma/ops.h) \
     $(wildcard include/config/dma/declare/coherent.h) \
     $(wildcard include/config/dma/cma.h) \
     $(wildcard include/config/arch/has/sync/dma/for/device.h) \
     $(wildcard include/config/arch/has/sync/dma/for/cpu.h) \
     $(wildcard include/config/arch/has/sync/dma/for/cpu/all.h) \
+    $(wildcard include/config/dma/ops/bypass.h) \
     $(wildcard include/config/of.h) \
     $(wildcard include/config/devtmpfs.h) \
     $(wildcard include/config/sysfs/deprecated.h) \
   include/linux/dev_printk.h \
+  include/linux/energy_model.h \
+  include/linux/sched/cpufreq.h \
+    $(wildcard include/config/cpu/freq.h) \
+  include/linux/sched/topology.h \
+    $(wildcard include/config/sched/debug.h) \
+    $(wildcard include/config/sched/mc.h) \
+    $(wildcard include/config/cpu/freq/gov/schedutil.h) \
+  include/linux/sched/idle.h \
+  include/linux/sched/sd_flags.h \
   include/linux/ioport.h \
     $(wildcard include/config/io/strict/devmem.h) \
   include/linux/klist.h \
@@ -890,25 +904,56 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
     $(wildcard include/config/pm/generic/domains.h) \
   include/linux/overflow.h \
   include/linux/device/bus.h \
+    $(wildcard include/config/acpi.h) \
   include/linux/device/class.h \
   include/linux/device/driver.h \
   arch/x86/include/asm/device.h \
-    $(wildcard include/config/iommu/api.h) \
   include/linux/pm_wakeup.h \
   include/linux/kprobes.h \
-    $(wildcard include/config/kretprobes.h) \
     $(wildcard include/config/kprobes/sanity/test.h) \
     $(wildcard include/config/optprobes.h) \
     $(wildcard include/config/kprobes/on/ftrace.h) \
   include/linux/ftrace.h \
     $(wildcard include/config/function/tracer.h) \
     $(wildcard include/config/dynamic/ftrace.h) \
+    $(wildcard include/config/have/dynamic/ftrace/with/args.h) \
     $(wildcard include/config/dynamic/ftrace/with/regs.h) \
     $(wildcard include/config/dynamic/ftrace/with/direct/calls.h) \
     $(wildcard include/config/have/dynamic/ftrace/with/direct/calls.h) \
     $(wildcard include/config/stack/tracer.h) \
     $(wildcard include/config/function/profiler.h) \
     $(wildcard include/config/ftrace/syscalls.h) \
+  include/linux/trace_recursion.h \
+    $(wildcard include/config/ftrace/record/recursion.h) \
+  include/linux/interrupt.h \
+    $(wildcard include/config/irq/forced/threading.h) \
+    $(wildcard include/config/generic/irq/probe.h) \
+    $(wildcard include/config/irq/timings.h) \
+  include/linux/irqreturn.h \
+  include/linux/irqnr.h \
+  include/uapi/linux/irqnr.h \
+  include/linux/hardirq.h \
+  include/linux/context_tracking_state.h \
+    $(wildcard include/config/context/tracking.h) \
+  include/linux/ftrace_irq.h \
+    $(wildcard include/config/hwlat/tracer.h) \
+  include/linux/vtime.h \
+    $(wildcard include/config/virt/cpu/accounting.h) \
+    $(wildcard include/config/irq/time/accounting.h) \
+  arch/x86/include/asm/hardirq.h \
+    $(wildcard include/config/kvm/intel.h) \
+    $(wildcard include/config/have/kvm.h) \
+    $(wildcard include/config/x86/thermal/vector.h) \
+    $(wildcard include/config/x86/mce/threshold.h) \
+    $(wildcard include/config/x86/mce/amd.h) \
+    $(wildcard include/config/x86/hv/callback/vector.h) \
+    $(wildcard include/config/hyperv.h) \
+  arch/x86/include/asm/irq.h \
+  arch/x86/include/asm/irq_vectors.h \
+    $(wildcard include/config/x86/io/apic.h) \
+    $(wildcard include/config/pci/msi.h) \
+  arch/x86/include/asm/sections.h \
+  include/asm-generic/sections.h \
   include/linux/trace_clock.h \
   arch/x86/include/asm/trace_clock.h \
   include/linux/kallsyms.h \
@@ -916,12 +961,13 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
   include/linux/mm.h \
     $(wildcard include/config/have/arch/mmap/rnd/bits.h) \
     $(wildcard include/config/have/arch/mmap/rnd/compat/bits.h) \
+    $(wildcard include/config/debug/info/btf.h) \
     $(wildcard include/config/arch/uses/high/vma/flags.h) \
     $(wildcard include/config/arch/has/pkeys.h) \
     $(wildcard include/config/ppc.h) \
     $(wildcard include/config/parisc.h) \
     $(wildcard include/config/sparc64.h) \
-    $(wildcard include/config/arm64.h) \
+    $(wildcard include/config/arm64/mte.h) \
     $(wildcard include/config/shmem.h) \
     $(wildcard include/config/dev/pagemap/ops.h) \
     $(wildcard include/config/device/private.h) \
@@ -930,11 +976,7 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
     $(wildcard include/config/arch/has/pte/devmap.h) \
     $(wildcard include/config/debug/vm/rb.h) \
     $(wildcard include/config/page/poisoning.h) \
-    $(wildcard include/config/init/on/alloc/default/on.h) \
-    $(wildcard include/config/init/on/free/default/on.h) \
     $(wildcard include/config/debug/pagealloc.h) \
-    $(wildcard include/config/arch/has/set/direct/map.h) \
-    $(wildcard include/config/hibernation.h) \
     $(wildcard include/config/hugetlbfs.h) \
     $(wildcard include/config/mapping/dirty/helpers.h) \
   include/linux/mmap_lock.h \
@@ -951,6 +993,7 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
   include/linux/sizes.h \
   include/linux/pgtable.h \
     $(wildcard include/config/highpte.h) \
+    $(wildcard include/config/gup/get/pte/low/high.h) \
     $(wildcard include/config/have/arch/transparent/hugepage/pud.h) \
     $(wildcard include/config/have/arch/soft/dirty.h) \
     $(wildcard include/config/arch/enable/thp/migration.h) \
@@ -963,7 +1006,19 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
     $(wildcard include/config/x86/debug/fpu.h) \
   include/asm-generic/pgtable_uffd.h \
   arch/x86/include/asm/pgtable_64.h \
+  arch/x86/include/asm/fixmap.h \
+    $(wildcard include/config/provide/ohci1394/dma/init.h) \
+    $(wildcard include/config/pci/mmconfig.h) \
+    $(wildcard include/config/x86/intel/mid.h) \
+    $(wildcard include/config/acpi/apei/ghes.h) \
+    $(wildcard include/config/intel/txt.h) \
+  arch/x86/include/uapi/asm/vsyscall.h \
+  include/asm-generic/fixmap.h \
   arch/x86/include/asm/pgtable-invert.h \
+  include/linux/kasan.h \
+    $(wildcard include/config/kasan/stack.h) \
+    $(wildcard include/config/kasan/vmalloc.h) \
+    $(wildcard include/config/kasan/inline.h) \
   include/linux/huge_mm.h \
   include/linux/sched/coredump.h \
     $(wildcard include/config/core/dump/default/elf/headers.h) \
@@ -974,8 +1029,6 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
   include/linux/vm_event_item.h \
     $(wildcard include/config/memory/balloon.h) \
     $(wildcard include/config/balloon/compaction.h) \
-  arch/x86/include/asm/sections.h \
-  include/asm-generic/sections.h \
   include/linux/ptrace.h \
   include/linux/pid_namespace.h \
     $(wildcard include/config/pid/ns.h) \
@@ -994,20 +1047,6 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
   include/uapi/asm-generic/sockios.h \
   include/uapi/linux/sockios.h \
   include/linux/uio.h \
-  include/crypto/hash.h \
-  include/linux/crypto.h \
-    $(wildcard include/config/crypto/stats.h) \
-  include/linux/slab.h \
-    $(wildcard include/config/debug/slab.h) \
-    $(wildcard include/config/failslab.h) \
-    $(wildcard include/config/have/hardened/usercopy/allocator.h) \
-    $(wildcard include/config/slab.h) \
-    $(wildcard include/config/slub.h) \
-    $(wildcard include/config/slob.h) \
-  include/linux/kasan.h \
-    $(wildcard include/config/kasan/vmalloc.h) \
-    $(wildcard include/config/kasan/generic.h) \
-    $(wildcard include/config/kasan/inline.h) \
   include/uapi/linux/uio.h \
   include/uapi/linux/socket.h \
   include/uapi/linux/if.h \
@@ -1020,7 +1059,9 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
   include/uapi/linux/magic.h \
   arch/x86/include/asm/user32.h \
   include/asm-generic/compat.h \
+    $(wildcard include/config/compat/for/u64/alignment.h) \
   arch/x86/include/asm/syscall_wrapper.h \
+  include/linux/freelist.h \
   arch/x86/include/asm/kprobes.h \
   include/asm-generic/kprobes.h \
   arch/x86/include/asm/text-patching.h \
@@ -1028,28 +1069,21 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
   arch/x86/include/asm/insn.h \
   arch/x86/include/asm/inat.h \
   arch/x86/include/asm/inat_types.h \
+  include/linux/slab.h \
+    $(wildcard include/config/debug/slab.h) \
+    $(wildcard include/config/failslab.h) \
+    $(wildcard include/config/have/hardened/usercopy/allocator.h) \
+    $(wildcard include/config/slab.h) \
+    $(wildcard include/config/slub.h) \
+    $(wildcard include/config/slob.h) \
   include/generated/uapi/linux/version.h \
-  include/linux/interrupt.h \
-    $(wildcard include/config/irq/forced/threading.h) \
-    $(wildcard include/config/generic/irq/probe.h) \
-    $(wildcard include/config/irq/timings.h) \
-  include/linux/irqreturn.h \
-  include/linux/irqnr.h \
-  include/uapi/linux/irqnr.h \
-  include/linux/hardirq.h \
-  include/linux/context_tracking_state.h \
-    $(wildcard include/config/context/tracking.h) \
-  include/linux/ftrace_irq.h \
-    $(wildcard include/config/hwlat/tracer.h) \
-  include/linux/vtime.h \
-    $(wildcard include/config/virt/cpu/accounting.h) \
-    $(wildcard include/config/irq/time/accounting.h) \
-  arch/x86/include/asm/irq.h \
   include/linux/vmalloc.h \
   arch/x86/include/asm/vmalloc.h \
   arch/x86/include/asm/pgtable_areas.h \
   arch/x86/include/asm/cacheflush.h \
   include/asm-generic/cacheflush.h \
+  arch/x86/include/asm/apic.h \
+    $(wildcard include/config/x86/x2apic.h) \
   include/linux/syscalls.h \
     $(wildcard include/config/clone/backwards.h) \
     $(wildcard include/config/clone/backwards3.h) \
@@ -1060,6 +1094,16 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
     $(wildcard include/config/have/syscall/tracepoints.h) \
   include/linux/tracepoint.h \
     $(wildcard include/config/tracepoint.h) \
+  include/linux/static_call.h \
+  include/linux/cpu.h \
+    $(wildcard include/config/pm/sleep/smp.h) \
+    $(wildcard include/config/pm/sleep/smp/nonzero/cpu.h) \
+    $(wildcard include/config/hotplug/smt.h) \
+  include/linux/node.h \
+    $(wildcard include/config/hmem/reporting.h) \
+    $(wildcard include/config/memory/hotplug/sparse.h) \
+  include/linux/cpuhotplug.h \
+  arch/x86/include/asm/static_call.h \
   include/linux/trace_events.h \
     $(wildcard include/config/kprobe/events.h) \
     $(wildcard include/config/uprobe/events.h) \
@@ -1094,14 +1138,6 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
   arch/x86/include/uapi/asm/hw_breakpoint.h \
   include/linux/kdebug.h \
   arch/x86/include/asm/kdebug.h \
-  include/linux/cpu.h \
-    $(wildcard include/config/pm/sleep/smp.h) \
-    $(wildcard include/config/pm/sleep/smp/nonzero/cpu.h) \
-    $(wildcard include/config/hotplug/smt.h) \
-  include/linux/node.h \
-    $(wildcard include/config/hmem/reporting.h) \
-    $(wildcard include/config/memory/hotplug/sparse.h) \
-  include/linux/cpuhotplug.h \
   include/linux/irq_work.h \
     $(wildcard include/config/irq/work.h) \
   arch/x86/include/asm/irq_work.h \
@@ -1127,6 +1163,7 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
   include/linux/bpf-cgroup.h \
   include/linux/bpf.h \
     $(wildcard include/config/bpf/jit.h) \
+    $(wildcard include/config/bpf/jit/always/on.h) \
     $(wildcard include/config/bpf/stream/parser.h) \
     $(wildcard include/config/inet.h) \
   include/uapi/linux/bpf.h \
@@ -1137,6 +1174,11 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
     $(wildcard include/config/bpf/lirc/mode2.h) \
   include/uapi/linux/bpf_common.h \
   include/linux/file.h \
+  include/linux/sched/mm.h \
+    $(wildcard include/config/arch/has/membarrier/callbacks.h) \
+  include/linux/sync_core.h \
+    $(wildcard include/config/arch/has/sync/core/before/usermode.h) \
+  arch/x86/include/asm/sync_core.h \
   include/linux/bpf_types.h \
     $(wildcard include/config/bpf/lsm.h) \
     $(wildcard include/config/xdp/sockets.h) \
@@ -1158,6 +1200,7 @@ deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o := \
     $(wildcard include/config/security/network/xfrm.h) \
     $(wildcard include/config/security/path.h) \
     $(wildcard include/config/securityfs.h) \
+  include/linux/kernel_read_file.h \
   /home/valentino/CLionProjects/data-exchange/lib/../include/vtpmo.h \
 
 /home/valentino/CLionProjects/data-exchange/lib/scth.o: $(deps_/home/valentino/CLionProjects/data-exchange/lib/scth.o)

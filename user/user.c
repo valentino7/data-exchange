@@ -8,9 +8,11 @@
 #include <sys/msg.h>
 
 #define TAG_GET 134
-#define TAG_SEND 174
-#define TAG_RECEIVE 177
-#define TAG_CTL 178
+#define TAG_SEND 156
+#define TAG_RECEIVE 174
+#define TAG_CTL 177
+
+
 
 #define REMOVE 0
 #define AWAKE_ALL 1
@@ -35,42 +37,43 @@ int sys_tag_ctl(int tag, int command){
     return syscall(TAG_CTL, tag, command);
 }
 
-
-
-int main(int argc, char** argv){
-
-
-
-//    if(argc < 3){
-//        printf("usage: prog num-spawns sycall-num\n");
-//        return EXIT_FAILURE;
-//    }
-//    printf("get uid %d \n", getuid ());
-
-//    int tag = sys_tag_get(9, IPC_CREAT  , RESTRICT);
-//    printf("tag: %d \n", tag);
-//
-//    tag = sys_tag_get(9, IPC_EXCL , RESTRICT);
-//    printf("tag: %d \n", tag);
-//
-//    tag = sys_tag_get(9, IPC_CREAT | IPC_EXCL  , RESTRICT);
-//    printf("tag: %d \n", tag);
-
+void primoTest(){
     int tag = sys_tag_get(24, IPC_CREAT, RESTRICT);
     printf("tag: %d \n", tag);
 
-    //un thread receiver 0 va a dormire mentre l'altro elimina
+    tag = sys_tag_get(25, IPC_CREAT, RESTRICT);
+    printf("tag: %d \n", tag);
 
-//    sys_tag_get(9, 3,RESTRICT);
-//    sys_tag_send(8, 3, "ciao", 4);
-//
-    char* buffer = malloc(4);
-    int num = sys_tag_receive(tag, 3, buffer, 4);
-    printf("numero %d \n", num);
+    tag = sys_tag_get(0, IPC_CREAT, RESTRICT);
+    printf("tag: %d \n", tag);
+
+    tag = sys_tag_get(2, IPC_CREAT, RESTRICT);
+    printf("tag: %d \n", tag);
+
+    tag = sys_tag_get(3, IPC_CREAT, RESTRICT);
+    printf("tag: %d \n", tag);
+//    char* buffer = malloc(4);
+//    int num = sys_tag_receive(tag, 3, buffer, 4);
+//    printf("numero %d \n", num);
 //    sys_tag_send(8, 3, "ciao", 4);
 
 //    printf("rimozione %d \n", sys_tag_cmd(tag, REMOVE));
 
+}
+
+void secondoTest(){
+    int tag = sys_tag_get(24, IPC_CREAT, RESTRICT);
+
+    printf("tag: %d \n", tag);
+    char* buffer = malloc(10);
+    int receive_result = sys_tag_receive(tag, 2, buffer, 10);
+    printf("receive_result: %d \n", receive_result);
+}
+
+int main(int argc, char** argv){
+
+    //primoTest();
+    secondoTest();
     return 0;
 
 }

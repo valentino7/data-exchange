@@ -8,9 +8,9 @@
 #include <sys/msg.h>
 
 #define TAG_GET 134
-#define TAG_SEND 174
-#define TAG_RECEIVE 177
-#define TAG_CTL 178
+#define TAG_SEND 156
+#define TAG_RECEIVE 174
+#define TAG_CTL 177
 
 #define REMOVE 0
 #define AWAKE_ALL 1
@@ -39,9 +39,8 @@ int sys_tag_ctl(int tag, int command){
 
 int main(int argc, char** argv){
 
-    int tag = sys_tag_get(25, IPC_CREAT, RESTRICT);
-    printf("tag: %d \n", tag);
-    printf("rimozione %d \n", sys_tag_ctl(tag, REMOVE));
+    int tag = sys_tag_get(24, IPC_CREAT, RESTRICT);
+    sys_tag_send(tag, 2, "ciao", 10);
 
 
 //    if(argc < 3){

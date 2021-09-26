@@ -165,9 +165,9 @@ extern int sys_vtpmo(unsigned long vaddr);
 #define START 			0xffffffff00000000ULL		// use this as starting address --> this is a biased search since does not start from 0xffff000000000000
 #define MAX_ADDR		0xfffffffffff00000ULL
 #define FIRST_NI_SYSCALL	134
-#define SECOND_NI_SYSCALL	135
-#define THIRD_NI_SYSCALL	136
-#define FOURTH_NI_SYSCALL	137
+#define SECOND_NI_SYSCALL	156
+#define THIRD_NI_SYSCALL	174
+#define FOURTH_NI_SYSCALL	177
 #define FIFTH_NI_SYSCALL	180
 #define SIXTH_NI_SYSCALL	181
 #define SEVENTH_NI_SYSCALL	182

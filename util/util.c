@@ -372,9 +372,9 @@ int my_newque(struct ipc_params * params){
     msq->q_perm.mode = params->flg;
     msq->q_perm.key = params->key;
 
-    retval = ipc_addid( &msq->q_perm, 5);
+    retval = ipc_addid( &msq->q_perm, 3);
 
-    printk("valore funzione 1 : %d %d \n",msq->q_perm.id, params->key);
+    printk("TAG_GET: valore id, key  : %d %d \n",msq->q_perm.id, params->key);
     if (retval < 0) {
         printk("errore IPC ADDID  \n");
         ipc_rcu_putref(&msq->q_perm, msg_rcu_free);
@@ -450,6 +450,7 @@ static int ipcget_public(struct ipc_params * params)
 	int flg = params->flg>>1;
 	int err;
 
+	printk("flag %d \n", flg);
 	/*
 	 * Take the lock as a writer since we are potentially going to add
 	 * a new entry + read locks are not "upgradable"
@@ -556,6 +557,7 @@ bool ipc_rcu_getref(struct kern_ipc_perm *ptr)
 void ipc_rcu_putref(struct kern_ipc_perm *ptr,
 			void (*func)(struct rcu_head *head))
 {
+
 	if (!refcount_dec_and_test(&ptr->refcount))
 		return;
 
