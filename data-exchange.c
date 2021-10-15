@@ -421,9 +421,6 @@ int remove_tag(int tag){
         up_write(&ids->rwsem);
         return -1;
     }
-
-
-
     return 1;
 }
 

@@ -112,8 +112,12 @@ void test_tag_get(){
 //    int receive_result_restrict= sys_tag_receive(tag_restrict, 2, buffer_restrict, 10);
 //    printf("receive_result_restrict mi aspetto un errore avendo cambiato euid: %d \n", receive_result_restrict);
 
-    //test provo a riaprire il tag cambiando le restrizioni
-    tag_restrict = sys_tag_get(2, IPC_EXCL, NO_RESTRICT);
+    //test provo a riaprire il tag cambiando utente quando è restrict
+    tag_restrict = sys_tag_get(2, IPC_EXCL, RESTRICT);
+    printf("tag cambiato in NO_RESTRICT: %d \n", tag_restrict);
+
+    //test provo a riaprire il tag mettendo no_restrict quando era creato come restrict
+    tag_restrict = sys_tag_get(2, IPC_EXCL, RESTRICT);
     printf("tag cambiato in NO_RESTRICT: %d \n", tag_restrict);
 //    char* buffer_restrict = malloc(10);
 //    int receive_result_restrict= sys_tag_receive(tag_restrict, 2, buffer_restrict, 10);
@@ -121,31 +125,38 @@ void test_tag_get(){
 
 }
 
-void test_tag_receive(){
+void test_tag_send_receive(){
     int tag = sys_tag_get(0, IPC_CREAT, RESTRICT);
-    printf("tag: %d \n", tag);
+    //testo che ci siano 32 livelli
+    int pid;
+    for (int i=0; i!= 32; i++){
+        pid=fork();  // creo un nuovo processo
+        if(pid<0)    exit(1);  // errore, duplicazione non eseguita
+        else  {
+            if(pid==0) {
+                char* buffer = malloc(10);
+                int receive_result= sys_tag_receive(tag, i, buffer, 10);
+            }
+        }
+    }
+
+    for (int i=0; i!= 32; i++){
+        pid=fork();  // creo un nuovo processo
+        if(pid<0)    exit(1);  // errore, duplicazione non eseguita
+        else  {
+            if(pid==0) {
+                sys_tag_send(tag, i, "buffer", 10);
+            }
+        }
+    }
+
 }
 
-
-void test1_tag_get(){
-    int tag;
-//    tag = sys_tag_get(1, IPC_CREAT, RESTRICT);
-//    printf("tag: %d \n", tag);
-//
-//    tag = sys_tag_get(1, IPC_CREAT, RESTRICT);
-//    printf("tag: %d \n", tag);
-
-    tag = sys_tag_get(2, IPC_CREAT, RESTRICT);
-    printf("tag: %d \n", tag);
-
-
-}
 
 int main(int argc, char** argv){
 
-    test_tag_get();
-//    test1_tag_get();
-//    test_tag_receive();
+//    test_tag_get();
+    test_tag_send_receive();
     return 0;
 
 }

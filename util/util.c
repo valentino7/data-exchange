@@ -463,10 +463,10 @@ static int ipcget_public(struct ipc_params * params)
 	err=-1;
 	down_write(&ids->rwsem);
 	ipcp = ipc_findkey(params->key);
-    printk("ipc è null? : %d \n",ipcp->mode&1, params->flg&1) ;
 
     if(flg == (IPC_CREAT | IPC_EXCL) || flg == (IPC_CREAT) || flg == (IPC_EXCL) ){
         if (ipcp == NULL) {
+            printk("ipc è null\n") ;
             /* key not used */
             //l and torna falso quando tutti i bit sono diversi
             if (!(flg & IPC_CREAT))
@@ -482,13 +482,18 @@ static int ipcget_public(struct ipc_params * params)
 
             // ipc object has been locked by ipc_findkey()
             //se esiste già un tag devo controllare se non sto cambiando le restrizioni
+            int old_permission = ipcp->mode&1;
+            int new_premission = params->flg&1;
 
-            printk("restriction mode : %d %d \n",ipcp->mode&1, params->flg&1) ;
-            if( (ipcp->mode&1 == RESTRICT &&  params->flg&1 == NO_RESTRICT) || (ipcp->mode&1 == NO_RESTRICT &&  params->flg&1 == RESTRICT) )
+            if( (old_permission == RESTRICT &&   new_premission == NO_RESTRICT) || (old_permission == NO_RESTRICT &&  new_premission == RESTRICT) ) {
+                printk("if 1 \n");
                 err = -EPERM;
+            }
             //se esiste già un tag devo controllare che il euid è conforme alle restrizioni
-            else if( ipcp->mode&1 == RESTRICT &&  ceuid.val != ipcp-> cuid.val)
+            else if( old_permission == RESTRICT &&  ceuid.val != ipcp-> cuid.val) {
+                printk("if 2 \n");
                 err = -EPERM;
+            }
             else if (flg & IPC_CREAT && flg & IPC_EXCL)
                 err = -EEXIST;
             else {
