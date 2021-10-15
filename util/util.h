@@ -46,7 +46,7 @@
 #define ipcmni_seq_shift()	IPCMNI_SHIFT
 #define IPCMNI_IDX_MASK		((1 << IPCMNI_SHIFT) - 1)
 #endif /* CONFIG_SYSVIPC_SYSCTL */
-
+#define MAXIMUM_TAGS 3
 
 
 
@@ -111,6 +111,7 @@ struct _tag_level{
     struct _tag_level_group* group;
     //spinlock_t queue_lock;
     rwlock_t level_lock;
+
 };
 
 //almeno 256 servizi runnabili
@@ -119,7 +120,7 @@ typedef struct _tag_elem{
     struct _tag_level* level;
     int num_thread_per_tag __attribute__((aligned(8)));
     rwlock_t tag_lock;
-
+    pid_t pid_creator;
 //    int tag;
 //    int key;
 
@@ -253,6 +254,8 @@ static inline void ipc_unlock(struct kern_ipc_perm *perm)
     ipc_unlock_object(perm);
     rcu_read_unlock();
 }
+
+
 
 /*
  * ipc_valid_object() - helper to sort out IPC_RMID races for codepaths

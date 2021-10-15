@@ -153,21 +153,26 @@ char* load_msg(char* buffer, int size){
 int check_permission(int permission,  kuid_t euid){
     kuid_t ceuid;
     ceuid = current_euid();
+
+    printk("current euid, ipc cuid, permission %d %d %d\n ", ceuid.val, euid.val, permission );
+
     if( (permission==RESTRICT &&  euid.val == ceuid.val) || permission == NO_RESTRICT)
         return 1;
+    printk("check permission fail in function check permission\n ");
     return -1;
 
 }
 
 struct _tag_elem* check_and_get_tag_if_exists(int id){
     struct kern_ipc_perm *ipcp = ipc_obtain_object_idr(id);
-    //prendo l'ultimo bit con &1
-    //restituisco errore in caso non ci siano permessi
-    if(!check_permission(ipcp->mode&1, ipcp-> cuid ) )
-        return -1;
-
     if (IS_ERR(ipcp))
         return ERR_CAST(ipcp);
+    //prendo l'ultimo bit con &1
+    //restituisco errore in caso non ci siano permessi
+    if(check_permission(ipcp->mode&1, ipcp-> cuid ) == -1) {
+        printk("check permission fail\n ");
+        return -1;
+    }
 
     return container_of(ipcp, struct _tag_elem, q_perm);
 }
@@ -262,12 +267,13 @@ int wrapper_thread_send (void* data) {
     gd= (struct global_data *) data;
     level = gd->level;
     buff= "\0";
-    gd->error[level] = send_msg(gd->tag, gd->level, buff, 0);
+    printk("levello %d\n ", gd->level);
+    //gd->error[level] = send_msg(gd->tag, gd->level, buff, 0);
 
     atomic_dec(&gd->thread_count);
-    wake_up(&gd->wq);
+    //wake_up(&gd->wq);
 
-    return 1;
+    return 0;
 }
 
 int awake_all(int tag){
@@ -276,25 +282,29 @@ int awake_all(int tag){
     int i;
     int ret;
 
-    init_waitqueue_head(&gd.wq);
-    for(i=0; i!=32; i++){
-        atomic_inc(&gd.thread_count);
-        kthread = kthread_run(wrapper_thread_send, &gd, "send kthreads");
-        if (IS_ERR(kthread)) {
-            ret = PTR_ERR(kthread);
-            printk("Unable to run kthread err %d\n", ret);
-            if(atomic_read(&gd.thread_count) != 0)
-                wait_event_interruptible(gd.wq, atomic_read(&gd.thread_count) == 0);
-            return ret;
-        }
-    }
-    wait_event_interruptible(gd.wq, atomic_read(&gd.thread_count) == 0);
-    /* final cleanup */
-    //se ho ricevuto un errore ritorno awake all error
     for(i=0; i!=32; i++) {
-        if (gd.error[i] < 0)
-            return -1;
+        send_msg(tag, i, "\0", 0);
     }
+//    init_waitqueue_head(&gd.wq);
+//    for(i=0; i!=32; i++){
+//        printk("SONO NELL AWAKE ALL %d \n", i);
+//        atomic_inc(&gd.thread_count);
+//        kthread = kthread_run(wrapper_thread_send, &gd, "send kthreads");
+//        if (IS_ERR(kthread)) {
+//            ret = PTR_ERR(kthread);
+//            printk("Unable to run kthread err %d\n", ret);
+//            if(atomic_read(&gd.thread_count) != 0)
+//                wait_event_interruptible(gd.wq, atomic_read(&gd.thread_count) == 0);
+//            return ret;
+//        }
+//    }
+//    wait_event_interruptible(gd.wq, atomic_read(&gd.thread_count) == 0);
+//    /* final cleanup */
+//    //se ho ricevuto un errore ritorno awake all error
+//    for(i=0; i!=32; i++) {
+//        if (gd.error[i] < 0)
+//            return -1;
+//    }
 
     return 1;
 }
@@ -425,12 +435,16 @@ static int sysvipc_msg_proc_show(struct seq_file *s, void *it)
 //	struct user_namespace *user_ns = seq_user_ns(s);
 	struct kern_ipc_perm *ipcp = it;
 	struct _tag_elem *msq = container_of(ipcp, struct _tag_elem, q_perm);
-
-	seq_printf(s,
-		   "%10d %10d  \n",
-		   msq->q_perm.key,
-		   msq->q_perm.id
-		 );
+    int i=0;
+    for (i = 0; i<32; i++){
+        seq_printf(s,
+               "%10d %10d %10d %10ld  \n",
+               msq->q_perm.key,
+               msq->pid_creator,
+               i,
+               msq->level[i].group->num_thread
+             );
+    }
 
 	return 0;
 }
@@ -467,53 +481,6 @@ asmlinkage int sys_tag_get(int key, int command, int permission){
     printk("ESCO DALLA TAG_GET, risultato id %d \n ", result);
     return result;
 
-
- /*   int tag;
-    elem* p;
-
-    printk("%s: tag-params sys-call has been called %d %d %d  \n",MODNAME,key,command,permission);
-    printk("%s: tag user id %d\n",MODNAME,current->cred->euid);
-
-
-    if (permission != RESTRICT && permission != NO_RESTRICT ){
-        printk("%s: permission non valido %d\n",MODNAME,current->cred->euid);
-        return -1;
-    }
-
-
-    if(command == OPEN){
-        tag = check_and_get_tag_if_key_exists(key);
-        if (tag==-1) {
-            printk("%s: tag non aperto error%d\n", MODNAME, current->cred->euid);
-            return -1;
-        }
-        return tag;
-    }else if (command == CREATE){
-        p = alloc_tag_service(key);
-        // se il nodo non esiste qualcuno potrebbe inserire lo stesso nel mentre dopo il check e quindi devo bloccare le insert
-        spin_lock(&list_tag_lock);
-        //TODO NON FARE READ LOCK QUI
-        tag = check_and_get_tag_if_key_exists(key);
-        if(tag!=-1) {
-            printk("%s: tag gia esiste %d\n", MODNAME, current->cred->euid);
-            spin_unlock(&list_tag_lock);
-            return tag;
-        }
-        //spinlock per serializzare gli scrittori
-        add_elem(p);
-        spin_unlock(&list_tag_lock);
-
-        //rilascio lock
-        return tag;
-    }else{
-        printk("%s: command non valido %d\n",MODNAME,current->cred->euid);
-        return -1;
-    }
-*/
-
-
-    //caso di errore
-    return -1;
 }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
@@ -576,7 +543,6 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
     void* addr;
     //packed_work *the_task;
 
-    //TODO PERMISSION CHECK
 
     //trade off tra sicurezza e velocità
     if (size >= (MAX_MSG_SIZE - 1) || (long) size < 0 || tag < 0 || level > 31 || level < 0) goto bad_size;//leave 1 byte for string terminator
@@ -587,6 +553,10 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //Viene acquisita la message queue se esiste
     msq= check_and_get_tag_if_exists(tag);
+
+    printk("ISS ERR msq: %d \n", IS_ERR(msq));
+
+    printk("msq %d \n", msq);
     if (IS_ERR(msq)) {
         //TODO USARE REFERENCE COUNT
         //atomic_dec((atomic_t*)&msq->num_thread_per_tag);
@@ -701,7 +671,7 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
     memcpy((char*)addr,(char*)copy->kernel_buff,size);
     printk("%s: SONO NELLA RECEIVE - %s\n",MODNAME,copy->kernel_buff);
 
-    atomic_dec((atomic_t*)&copy->num_thread)
+    atomic_dec((atomic_t*)&copy->num_thread);
 //    mutex_unlock(&log_get_mutex);
 
 
@@ -787,6 +757,8 @@ asmlinkage int sys_tag_ctl(int tag, int command){
                 return -1;
             }
 
+            printk("SONO NELL AWAKE ALL USCITA\n");
+
             break;
         case REMOVE:
             printk("%s: remove tag \n", MODNAME);
@@ -852,8 +824,9 @@ int init_module(void) {
     ipc_init_ids();
 	printk("%s: initializing\n",MODNAME);
 
+    ipc_init_proc_interface("sysvipc/dataExchange","       TAG-key TAG-creator TAG-level Waiting-threads \n", sysvipc_msg_proc_show);
 
-//    ipc_init_proc_interface("sysvipc/dataExchange","       key      msqid \n", sysvipc_msg_proc_show);
+//    ipc_init_proc_interface("sysvipc/dataExchange","       TAG-key      msqid\n", sysvipc_msg_proc_show);
     //spin_lock_init(&list_tag_lock);
 
     //Doppio puntatore che punta all'array che mantiene dentro le system call libere

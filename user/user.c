@@ -19,8 +19,10 @@
 #define RESTRICT 0
 #define NO_RESTRICT 1
 
-
-//command: IPC_CREAT oppure IPC_EXCL
+//la key può essere IPC_PRIVATE espressa anche come 0 cosi da tornare see un tag diverso
+//command: IPC_CREAT oppure IPC_EXCL instanzia o apre
+//Con IPC_EXCL non creo il tag ma lo apro soltanto quindi se è gia aperto torna errore
+//permission: RESTRICT oppure NO_RESTRICT a seconda se può aprirlo anche un altro utente o no
 int sys_tag_get(int key, int command, int permission){
     return syscall(TAG_GET, key, command, permission);
 }
@@ -32,7 +34,7 @@ int sys_tag_send(int tag, int level, char* buffer, ssize_t size){
 int sys_tag_receive(int tag, int level, char* buffer, ssize_t size){
     return syscall(TAG_RECEIVE, tag, level, buffer, size);
 }
-
+//command: REMOVE oppure AWAKE_ALL
 int sys_tag_ctl(int tag, int command){
     return syscall(TAG_CTL, tag, command);
 }
@@ -70,10 +72,80 @@ void secondoTest(){
     printf("receive_result: %d \n", receive_result);
 }
 
+void test_tag_get(){
+    int tag;
+//    tag = sys_tag_get(1, IPC_CREAT, RESTRICT);
+//    printf("tag: %d \n", tag);
+//
+//    tag = sys_tag_get(1, IPC_CREAT, RESTRICT);
+//    printf("tag: %d \n", tag);
+
+    tag = sys_tag_get(2, IPC_EXCL, RESTRICT);
+    printf("Ritorna errore perchè il tag non è ancora stato creato %d \n", tag);
+
+    tag = sys_tag_get(2, IPC_CREAT|IPC_EXCL, RESTRICT);
+    printf("tag: %d \n", tag);
+
+    tag = sys_tag_get(2, IPC_CREAT|IPC_EXCL, RESTRICT);
+    printf("concatenando creat ed excl ritorna errore se il taag è gia stato creato: %d \n", tag);
+
+    tag = sys_tag_get(2, IPC_CREAT, RESTRICT);
+    printf("tag: %d \n", tag);
+
+    int tag_restrict = sys_tag_get(2, IPC_EXCL, RESTRICT);
+    printf("tag: %d \n", tag_restrict);
+
+    //test key ipc_private
+    int tag_no_restrict = sys_tag_get(0, IPC_CREAT, NO_RESTRICT);
+    printf("tag: %d \n", tag_no_restrict);
+
+    //test su restrict
+    printf("uid %d - euid %d\n",getuid(),geteuid());
+    seteuid(700);
+    printf("uid %d - euid %d\n",getuid(),geteuid());
+//    char* buffer_no_restrict = malloc(10);
+//    int receive_result_no_restrict= sys_tag_receive(tag_no_restrict, 2, buffer_no_restrict, 10);
+//    printf("receive_result: %d \n", receive_result_no_restrict);
+
+      //decommenta queste tre linee per vedere l'errore sull'utente non restrict
+//    char* buffer_restrict = malloc(10);
+//    int receive_result_restrict= sys_tag_receive(tag_restrict, 2, buffer_restrict, 10);
+//    printf("receive_result_restrict mi aspetto un errore avendo cambiato euid: %d \n", receive_result_restrict);
+
+    //test provo a riaprire il tag cambiando le restrizioni
+    tag_restrict = sys_tag_get(2, IPC_EXCL, NO_RESTRICT);
+    printf("tag cambiato in NO_RESTRICT: %d \n", tag_restrict);
+//    char* buffer_restrict = malloc(10);
+//    int receive_result_restrict= sys_tag_receive(tag_restrict, 2, buffer_restrict, 10);
+//    printf("receive_result_restrict mi aspetto un errore avendo cambiato euid: %d \n", receive_result_restrict);
+
+}
+
+void test_tag_receive(){
+    int tag = sys_tag_get(0, IPC_CREAT, RESTRICT);
+    printf("tag: %d \n", tag);
+}
+
+
+void test1_tag_get(){
+    int tag;
+//    tag = sys_tag_get(1, IPC_CREAT, RESTRICT);
+//    printf("tag: %d \n", tag);
+//
+//    tag = sys_tag_get(1, IPC_CREAT, RESTRICT);
+//    printf("tag: %d \n", tag);
+
+    tag = sys_tag_get(2, IPC_CREAT, RESTRICT);
+    printf("tag: %d \n", tag);
+
+
+}
+
 int main(int argc, char** argv){
 
-    //primoTest();
-    secondoTest();
+    test_tag_get();
+//    test1_tag_get();
+//    test_tag_receive();
     return 0;
 
 }

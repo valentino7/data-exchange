@@ -64,6 +64,10 @@
 #include <linux/rhashtable.h>
 #include <asm/unistd.h>
 
+
+#define RESTRICT 0
+#define NO_RESTRICT 1
+
 extern struct ipc_ids *ids;
 int ipc_min_cycle = RADIX_TREE_MAP_SIZE;
 
@@ -336,6 +340,7 @@ static void msg_rcu_free(struct rcu_head *head)
 msg_queue* alloc_and_fill_tag_service(void) {
     int i;
     struct _tag_elem *new = kmalloc(sizeof(struct _tag_elem), GFP_KERNEL);
+    new->pid_creator = current->pid;
     new->level = (struct _tag_level *) kmalloc(32 * sizeof(struct _tag_level), GFP_KERNEL);
 
     //inizializzo le 32 wait queue
@@ -360,7 +365,7 @@ msg_queue* alloc_and_fill_tag_service(void) {
 
 int my_newque(struct ipc_params * params){
 
-    printk("ENTRATO 1 : \n");
+    printk("ENTRATO in newque : \n");
     int retval;
     msg_queue *msq;
 
@@ -372,7 +377,7 @@ int my_newque(struct ipc_params * params){
     msq->q_perm.mode = params->flg;
     msq->q_perm.key = params->key;
 
-    retval = ipc_addid( &msq->q_perm, 3);
+    retval = ipc_addid( &msq->q_perm, MAXIMUM_TAGS);
 
     printk("TAG_GET: valore id, key  : %d %d \n",msq->q_perm.id, params->key);
     if (retval < 0) {
@@ -450,7 +455,7 @@ static int ipcget_public(struct ipc_params * params)
 	int flg = params->flg>>1;
 	int err;
 
-	printk("flag %d \n", flg);
+	printk("sono in ipcget_public \n");
 	/*
 	 * Take the lock as a writer since we are potentially going to add
 	 * a new entry + read locks are not "upgradable"
@@ -458,6 +463,7 @@ static int ipcget_public(struct ipc_params * params)
 	err=-1;
 	down_write(&ids->rwsem);
 	ipcp = ipc_findkey(params->key);
+    printk("ipc è null? : %d \n",ipcp->mode&1, params->flg&1) ;
 
     if(flg == (IPC_CREAT | IPC_EXCL) || flg == (IPC_CREAT) || flg == (IPC_EXCL) ){
         if (ipcp == NULL) {
@@ -468,10 +474,22 @@ static int ipcget_public(struct ipc_params * params)
             else
                 err = my_newque( params);
         } else {
-            printk("id perm : %d  \n",ipcp->id);
-            // ipc object has been locked by ipc_findkey()
 
-            if (flg & IPC_CREAT && flg & IPC_EXCL)
+
+            kuid_t ceuid;
+            ceuid = current_euid();
+
+
+            // ipc object has been locked by ipc_findkey()
+            //se esiste già un tag devo controllare se non sto cambiando le restrizioni
+
+            printk("restriction mode : %d %d \n",ipcp->mode&1, params->flg&1) ;
+            if( (ipcp->mode&1 == RESTRICT &&  params->flg&1 == NO_RESTRICT) || (ipcp->mode&1 == NO_RESTRICT &&  params->flg&1 == RESTRICT) )
+                err = -EPERM;
+            //se esiste già un tag devo controllare che il euid è conforme alle restrizioni
+            else if( ipcp->mode&1 == RESTRICT &&  ceuid.val != ipcp-> cuid.val)
+                err = -EPERM;
+            else if (flg & IPC_CREAT && flg & IPC_EXCL)
                 err = -EEXIST;
             else {
                 /*err = 0;
@@ -761,10 +779,15 @@ struct kern_ipc_perm *ipcctl_obtain_check(int id)
  */
 int ipcget(struct ipc_params *params)
 {
-	if (params->key == IPC_PRIVATE)
-		return ipcget_new( params);
-	else
-		return ipcget_public( params);
+	if (params->key == IPC_PRIVATE){
+        printk("SONO PRIVATE \n ");
+        return ipcget_new( params);
+    }
+	else{
+        printk("NON SONO PRIVATE \n ");
+        return ipcget_public( params);
+    }
+
 }
 
 ///**
