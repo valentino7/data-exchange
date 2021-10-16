@@ -679,7 +679,7 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
 //    spin_unlock(&msq->tag_lock);
     //rcu_read_unlock();
 
-
+    //returns the number of bytes NOT copied
     ret = copy_to_user((char*)buffer,(char*)addr,size);
     free_pages((unsigned long)addr,0);
 
@@ -709,8 +709,8 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
 
 
 
-    printk("%s: sys_get_message copy to user returned %d\n",MODNAME,(int)ret);
-    return size - ret;
+    printk("%s: sys_get_message copy to user returned %d string%d\n",MODNAME,(int)ret, strlen(buffer));
+    return strlen(buffer);
     bad_size:
 
     return -1;

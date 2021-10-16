@@ -40,28 +40,7 @@ int sys_tag_ctl(int tag, int command){
 int main(int argc, char** argv){
 
     int tag = sys_tag_get(24, IPC_CREAT, RESTRICT);
-    //sys_tag_send(tag, 2, "ciao", 10);
-    //sys_tag_ctl(tag, AWAKE_ALL);
-    sys_tag_ctl(tag, REMOVE);
-//    if(argc < 3){
-//        printf("usage: prog num-spawns sycall-num\n");
-//        return EXIT_FAILURE;
-//    }
-//    printf("get uid %d \n", getuid ());
 
-//    int tag = sys_tag_get(9, IPC_CREAT  , RESTRICT);
-//    printf("tag: %d \n", tag);
-//
-//    tag = sys_tag_get(9, IPC_EXCL , RESTRICT);
-//    printf("tag: %d \n", tag);
-//
-//    tag = sys_tag_get(9, IPC_CREAT | IPC_EXCL  , RESTRICT);
-//    printf("tag: %d \n", tag);
-
-
-//    sys_tag_send(0, 3, "ciao", 4);
-
-//    sys_tag_cmd(8, REMOVE);
 
     return 0;
 
