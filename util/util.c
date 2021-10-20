@@ -107,6 +107,8 @@ int ipc_init_ids(void)
 	int err;
 
     ids = kmalloc(sizeof(struct ipc_ids), GFP_KERNEL);
+    if(ids == NULL)
+        return -ENOMEM;
 	ids->in_use = 0;
 	ids->seq = 0;
 	init_rwsem(&ids->rwsem);
@@ -310,6 +312,7 @@ int ipc_addid( struct kern_ipc_perm *new, int limit)
     idr_preload_end();
 
     if (idx >= 0 && new->key != IPC_PRIVATE) {
+
         err = rhashtable_insert_fast(&ids->key_ht, &new->khtnode,
                                      ipc_kht_params);
         if (err < 0) {
@@ -340,32 +343,48 @@ static void msg_rcu_free(struct rcu_head *head)
 msg_queue* alloc_and_fill_tag_service(void) {
     int i;
     struct _tag_elem *new = kmalloc(sizeof(struct _tag_elem), GFP_KERNEL);
+    if(new==NULL){
+        return -ENOMEM;
+    }
+
     new->pid_creator = current->pid;
     new->level = (struct _tag_level *) kmalloc(32 * sizeof(struct _tag_level), GFP_KERNEL);
 
+    if(new->level==NULL){
+        return -ENOMEM;
+    }
+
+
+
     //inizializzo le 32 wait queue
-    printk(" prima aver inizializzato awake:\n" );
     rwlock_init(&new->tag_lock);
 
     new->num_thread_per_tag=0;
     for (i = 0; i < 32; i++) {
+
         new->level[i].group = kmalloc(sizeof(struct _tag_level_group), GFP_KERNEL);
+
+        if(new->level[i].group == NULL){
+
+            return -ENOMEM;
+        }
+
+
 //        spin_lock_init(&new->level[i].level_lock);
         rwlock_init(&new->level[i].level_lock);
+
 //        spin_lock_init(&new->level[i].level_lock);
         spin_lock_init(&new->level[i].group->lock_presence_counter);
 
         new->level[i].group->awake = 1;
-        init_waitqueue_head(&new->level[i].my_queue);
+        init_waitqueue_head(&new->level[i].group->my_queue);
 
     }
-    printk(" dpo aver inizializzato awake: %d \n", new->level[3].group->awake);
     return new;
 }
 
 int my_newque(struct ipc_params * params){
 
-    printk("ENTRATO in newque : \n");
     int retval;
     msg_queue *msq;
 
@@ -379,9 +398,7 @@ int my_newque(struct ipc_params * params){
 
     retval = ipc_addid( &msq->q_perm, MAXIMUM_TAGS);
 
-    printk("TAG_GET: valore id, key  : %d %d \n",msq->q_perm.id, params->key);
     if (retval < 0) {
-        printk("errore IPC ADDID  \n");
         ipc_rcu_putref(&msq->q_perm, msg_rcu_free);
         call_rcu(&msq->q_perm.rcu, msg_rcu_free);
         return retval;
@@ -455,7 +472,6 @@ static int ipcget_public(struct ipc_params * params)
 	int flg = params->flg>>1;
 	int err;
 
-	printk("sono in ipcget_public \n");
 	/*
 	 * Take the lock as a writer since we are potentially going to add
 	 * a new entry + read locks are not "upgradable"
@@ -466,7 +482,6 @@ static int ipcget_public(struct ipc_params * params)
 
     if(flg == (IPC_CREAT | IPC_EXCL) || flg == (IPC_CREAT) || flg == (IPC_EXCL) ){
         if (ipcp == NULL) {
-            printk("ipc è null\n") ;
             /* key not used */
             //l and torna falso quando tutti i bit sono diversi
             if (!(flg & IPC_CREAT))
@@ -486,12 +501,10 @@ static int ipcget_public(struct ipc_params * params)
             int new_premission = params->flg&1;
 
             if( (old_permission == RESTRICT &&   new_premission == NO_RESTRICT) || (old_permission == NO_RESTRICT &&  new_premission == RESTRICT) ) {
-                printk("if 1 \n");
                 err = -EPERM;
             }
             //se esiste già un tag devo controllare che il euid è conforme alle restrizioni
             else if( old_permission == RESTRICT &&  ceuid.val != ipcp-> cuid.val) {
-                printk("if 2 \n");
                 err = -EPERM;
             }
             else if (flg & IPC_CREAT && flg & IPC_EXCL)
@@ -659,6 +672,8 @@ struct kern_ipc_perm *ipc_obtain_object_idr(int id)
     int idx = ipcid_to_idx(id);
 
     out = idr_find(&ids->ipcs_idr, idx);
+
+
     if (!out)
         return ERR_PTR(-EINVAL);
 
@@ -785,11 +800,9 @@ struct kern_ipc_perm *ipcctl_obtain_check(int id)
 int ipcget(struct ipc_params *params)
 {
 	if (params->key == IPC_PRIVATE){
-        printk("SONO PRIVATE \n ");
         return ipcget_new( params);
     }
 	else{
-        printk("NON SONO PRIVATE \n ");
         return ipcget_public( params);
     }
 

@@ -154,24 +154,22 @@ int check_permission(int permission,  kuid_t euid){
     kuid_t ceuid;
     ceuid = current_euid();
 
-    printk("current euid, ipc cuid, permission %d %d %d\n ", ceuid.val, euid.val, permission );
 
     if( (permission==RESTRICT &&  euid.val == ceuid.val) || permission == NO_RESTRICT)
         return 1;
-    printk("check permission fail in function check permission\n ");
     return -1;
 
 }
 
 struct _tag_elem* check_and_get_tag_if_exists(int id){
     struct kern_ipc_perm *ipcp = ipc_obtain_object_idr(id);
-    if (IS_ERR(ipcp))
+    if (IS_ERR(ipcp)){
         return ERR_CAST(ipcp);
+    }
     //prendo l'ultimo bit con &1
     //restituisco errore in caso non ci siano permessi
     if(check_permission(ipcp->mode&1, ipcp-> cuid ) == -1) {
-        printk("check permission fail\n ");
-        return -1;
+        return  ERR_PTR(-EPERM);
     }
 
     return container_of(ipcp, struct _tag_elem, q_perm);
@@ -179,11 +177,14 @@ struct _tag_elem* check_and_get_tag_if_exists(int id){
 
 
 int send_msg(int tag, int level, char* buffer, size_t size){
+
     void* addr;
     struct _tag_elem* msq;
     struct _tag_level_group* copy;
     int err;
+    int count;
     unsigned long ret;
+    struct _tag_level_group *new_group;
 
     addr = load_msg(buffer, size);
 
@@ -197,14 +198,21 @@ int send_msg(int tag, int level, char* buffer, size_t size){
         err = PTR_ERR(msq);
         goto out_unlock1;
     }
+
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //INIZIO LAVORO PER SVEGLIARE I THREAD
     //PRENDO IL LOCK DEL LIVELLO PER CAMBIARE LA VISTA DEL PUNTATORE A GROUP
-    write_lock(&msq->level[level].level_lock);
+
+    new_group = kmalloc(sizeof(struct _tag_level_group), GFP_KERNEL);
+    if (new_group == NULL)
+    {
+        return -ENOMEM;
+    }
+    write_lock(&(msq->level[level].level_lock));
     //controllo se il tag è stato eliminato
-    int count = atomic_read(&msq->q_perm.refcount.refs);
+    count = atomic_read(&msq->q_perm.refcount.refs);
     if(count== -1 || count==1){
         //NON CI SONO THREAD IN ATTESA
         write_unlock(&msq->level[level].level_lock);
@@ -213,26 +221,26 @@ int send_msg(int tag, int level, char* buffer, size_t size){
     }
 
     copy = msq->level[level].group;
-    msq->level[level].group = kmalloc(sizeof(struct _tag_level_group), GFP_KERNEL);
-    msq->level[level].group->awake = 1;
-    write_unlock(&msq->level[level].level_lock);
+    msq->level[level].group = new_group;
 
+    msq->level[level].group->awake = 1;
+    init_waitqueue_head(&msq->level[level].group->my_queue);
+    write_unlock(&(msq->level[level].level_lock));
 
     rcu_read_unlock();
+
     //SCRIVO MEMORIA CONDIVISA
 //    mutex_lock(&log_get_mutex);
     memcpy((char *) copy->kernel_buff, (char *) addr, size - ret);
 
     copy->kernel_buff[size - ret] = '\0';
-    printk("%s: kernel buffer updated content is: %s\n", MODNAME, copy->kernel_buff);
     //    valid = size - ret;
 //    mutex_unlock(&log_get_mutex);
     free_pages((unsigned long) addr, 0);
 
     //INFINE SVEGLIO I THREAD
     copy->awake = 0;
-//        printk("%s numero thread %d\n",MODNAME,local_num_thread);
-    wake_up(&msq->level[level].my_queue);
+    wake_up(&copy->my_queue);
 //    rcu_read_unlock();
 
     return size - ret;
@@ -267,7 +275,6 @@ int wrapper_thread_send (void* data) {
     gd= (struct global_data *) data;
     level = gd->level;
     buff= "\0";
-    printk("levello %d\n ", gd->level);
     //gd->error[level] = send_msg(gd->tag, gd->level, buff, 0);
 
     atomic_dec(&gd->thread_count);
@@ -287,12 +294,10 @@ int awake_all(int tag){
     }
 //    init_waitqueue_head(&gd.wq);
 //    for(i=0; i!=32; i++){
-//        printk("SONO NELL AWAKE ALL %d \n", i);
 //        atomic_inc(&gd.thread_count);
 //        kthread = kthread_run(wrapper_thread_send, &gd, "send kthreads");
 //        if (IS_ERR(kthread)) {
 //            ret = PTR_ERR(kthread);
-//            printk("Unable to run kthread err %d\n", ret);
 //            if(atomic_read(&gd.thread_count) != 0)
 //                wait_event_interruptible(gd.wq, atomic_read(&gd.thread_count) == 0);
 //            return ret;
@@ -315,10 +320,8 @@ static void msg_rcu_free(struct rcu_head *head)
     msg_queue *msq = container_of(p, msg_queue, q_perm);
 
 //    security_msg_queue_free(msq);
-    printk("prima rimozione %d \n", msq->q_perm.key);
 
     kfree(msq);
-    printk("fine rimozione %d \n", msq->q_perm.key);
 
 }
 /*
@@ -364,14 +367,6 @@ static void freeque( struct kern_ipc_perm *ipcp)
 
 int remove_tag(int tag){
 
-/*    spin_lock(&p->tag_lock);
-    //check se contator è -1
-    if (p->num_thread_per_tag != 0){
-        printk("%s: ci sono waiters \n", MODNAME);
-        spin_unlock(&p->tag_lock);
-        return -1;
-    }
-    spin_unlock(&p->tag_lock);*/
     //incremento contatore atomic per tag di accessi
     struct kern_ipc_perm *ipcp;
     msg_queue *msq;
@@ -387,7 +382,6 @@ int remove_tag(int tag){
         return err;
 //        goto out_unlock1;
     }
-
     msq = container_of(ipcp, msg_queue, q_perm);
 
    /* err = security_msg_queue_msgctl(msq, cmd);
@@ -400,21 +394,17 @@ int remove_tag(int tag){
     //i receiver che arrivano falliscono perche sto eliminando il nodo
     if (!write_trylock(&msq->tag_lock)) {
         //lock occupato dai waiters
+        rcu_read_unlock();
         up_write(&ids->rwsem);
         return -1;
     }
     //se c è solo un reader posso eliminare
     if( atomic_cmpxchg(&msq->q_perm.refcount.refs, 1, -1) == 1){
         /* freeque unlocks the ipc object and rcu */
-        freeque( ipcp);
-
-        //goto out_up;
-//    rcu_read_unlock();
-
+        freeque(ipcp);
         up_write(&ids->rwsem);
     }else{
    // if(refcount_read(&msq->q_perm.refcount) != 1){
-        printk("ci sono waiters");
         //ipc_unlock_object(&msq->q_perm);
         write_unlock(&msq->tag_lock);
         rcu_read_unlock();
@@ -461,9 +451,7 @@ asmlinkage int sys_tag_get(int key, int command, int permission){
     int cmd_permission;
     struct ipc_params params;
 
-    printk("Sono dentro la tag_get");
     if (permission != RESTRICT && permission != NO_RESTRICT ){
-        printk("%s: permission non valido %d\n",MODNAME,current->cred->euid);
         return -1;
     }
 
@@ -473,9 +461,9 @@ asmlinkage int sys_tag_get(int key, int command, int permission){
     cmd_permission = command + permission;
     params.flg = cmd_permission;
 
-    printk("flag %d \n ", params.flg);
     result = ipcget(&params);
-    printk("ESCO DALLA TAG_GET, risultato id %d \n ", result);
+
+
     return result;
 
 }
@@ -500,7 +488,6 @@ asmlinkage int sys_tag_send(int tag, int level, char* buffer, size_t size){
     //void* addr;
 
 
-    printk("%s: send-params sys-call has been called %d %d %s %zu  \n",MODNAME,tag,level,buffer,size);
 //    p->level[level].awake=0;
 
     //read lock sulla lettura
@@ -527,10 +514,6 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
 #endif
 
     struct _tag_elem * msq;
-    printk("tag_receive buffer: %s: \n", buffer);
-    printk("tag_receive size: %d: \n", size);
-    printk("tag_receive level: %d: \n", level);
-    printk("tag_receive tag: %d: \n", tag);
 
 
     struct _tag_level_group* copy;
@@ -542,8 +525,8 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
 
 
     //trade off tra sicurezza e velocità
-    if (size >= (MAX_MSG_SIZE - 1) || (long) size < 0 || tag < 0 || level > 31 || level < 0) goto bad_size;//leave 1 byte for string terminator
-
+    if (size >= (MAX_MSG_SIZE - 1) || (long) size < 0 || tag < 0 || level > 31 || level < 0)
+        goto bad_size;//leave 1 byte for string terminator
 
     rcu_read_lock();
 
@@ -551,13 +534,10 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
     //Viene acquisita la message queue se esiste
     msq= check_and_get_tag_if_exists(tag);
 
-    printk("ISS ERR msq: %d \n", IS_ERR(msq));
 
-    printk("msq %d \n", msq);
     if (IS_ERR(msq)) {
         //TODO USARE REFERENCE COUNT
         //atomic_dec((atomic_t*)&msq->num_thread_per_tag);
-        printk("errore restituzione tag con rore: %d", IS_ERR(msq));
         rcu_read_unlock();
         return PTR_ERR(msq);
         // goto out_unlock;
@@ -584,7 +564,6 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
 
     /* raced with RMID? */
 //        if (!ipc_valid_object(&msq->q_perm)) {
-//            printk("errore ipc invalid");
 //            err = -EIDRM;
 //            //TODO attenzione ipc_unlock_object(&msq->q_perm);
 //            rcu_read_unlock();
@@ -595,7 +574,6 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //INCREMENTO REF se va tutto bene
     if (!ipc_rcu_getref(&msq->q_perm)) {
-        printk("errore ipc get ref");
         err = -EIDRM;
         //TODO attenzione ipc_unlock_object(&msq->q_perm);
         read_unlock(&msq->tag_lock);
@@ -605,7 +583,6 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
 
     // check se contator è -1 serve per fare la remove atomica che
     /*  if (msq->num_thread_per_tag == -1){
-          printk("%s: tag not found \n", MODNAME);
           ipc_unlock_object(msq->q_perm);
           // rcu_read_unlock();
           return -1;
@@ -617,13 +594,12 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
-
-
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //COPIATURA DELL'AREA DI MEMORIA
     read_lock(&msq->level[level].level_lock);
     copy = msq->level[level].group ;
     //LETTURA E INCREMENTO NUMERO READERS PER IL GROUP PER IPLEMENTARE IL RILASCIO DELLA MEMORIA
+
 
     atomic_inc((atomic_t*)&copy->num_thread);//a new reader
     read_unlock(&msq->level[level].level_lock);
@@ -634,10 +610,10 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
     //SBLOCCO LE AREE
 
     //atomic_inc((atomic_t*)&p->level[level].num_thread);//a new sleeper
-    wait_event_interruptible(msq->level[level].my_queue, copy->awake == 0);
+    wait_event_interruptible(copy->my_queue, copy->awake == 0);
     //spin_unlock(&p->level[level].level_lock);
     if(copy->awake == 1){
-        printk("%s: thread exiting sleep for signal\n",MODNAME);
+
         read_unlock(&msq->tag_lock);
         rcu_read_unlock();
         return -EINTR;
@@ -650,6 +626,7 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
     //posso incrementare il reference anche qui perchè i tag non intaccano la memoria copiata
     //TODO da ragionare sulla posizione di questi rilasci
     //decremento il refcount
+
     ipc_rcu_putref(&msq->q_perm, msg_rcu_free);
     read_unlock(&msq->tag_lock);
     rcu_read_unlock();
@@ -666,7 +643,7 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
 
 //    mutex_lock(&log_get_mutex);
     memcpy((char*)addr,(char*)copy->kernel_buff,size);
-    printk("%s: SONO NELLA RECEIVE - %s\n",MODNAME,copy->kernel_buff);
+
 
     atomic_dec((atomic_t*)&copy->num_thread);
 //    mutex_unlock(&log_get_mutex);
@@ -687,7 +664,6 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
 //        the_task = kzalloc(sizeof(packed_work),GFP_ATOMIC);//non blocking memory allocation
 
     /* if (the_task == NULL) {
-         printk("%s: tasklet buffer allocation failure\n",MODNAME);
          module_put(THIS_MODULE);
          return -1;
      }
@@ -709,14 +685,12 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
 
 
 
-    printk("%s: sys_get_message copy to user returned %d string%d\n",MODNAME,(int)ret, strlen(buffer));
     return strlen(buffer);
     bad_size:
 
     return -1;
 
 
-//    printk("%s: receive-params sys-call has been called %d %d %s %zu  \n",MODNAME,tag,level,buffer,size);
     //mi attesto su un nodo
     //stampo tutti i nodi
 //    print_list_tag(tag);
@@ -744,35 +718,30 @@ asmlinkage int sys_tag_ctl(int tag, int command){
     //struct _tag_elem* p;
     //rcu_read_lock();
     //rcu_read_unlock();
-
+//    int err;
 
     //if (p!=NULL) {
     switch (command) {
         case AWAKE_ALL:
-            if(awake_all(tag) == -1){
-                printk("%s: awake all error \n", MODNAME);
-                return -1;
-            }
+            return awake_all(tag);
+//            if(awake_all(tag) == -1){
+//                return -1;
+//            }
+//
 
-            printk("SONO NELL AWAKE ALL USCITA\n");
-
-            break;
+//            break;
         case REMOVE:
-            printk("%s: remove tag \n", MODNAME);
-
-            if (remove_tag(tag)==-1){
-                printk("%s: non rimovibile \n", MODNAME);
-                return -1;
-            }
-            return 1;
-            break;
+            return remove_tag(tag);
+//            if (err < 0){
+//                return -1;
+//            }
+//            return 1;
+//            break;
     }
 //    }else{
-//        printk("%s: tag not found \n", MODNAME);
 //    }
 
 
-//    printk("%s: cmd-params sys-call has been called %d %d \n",MODNAME,tag,command);
     return 0;
 }
 
@@ -819,7 +788,6 @@ int init_module(void) {
 
 
     ipc_init_ids();
-	printk("%s: initializing\n",MODNAME);
 
     ipc_init_proc_interface("sysvipc/dataExchange","       TAG-key TAG-creator TAG-level Waiting-threads \n", sysvipc_msg_proc_show);
 
@@ -830,14 +798,12 @@ int init_module(void) {
     syscall_table_finder(&hacked_ni_syscall, &hacked_syscall_tbl);
 
 	if(!hacked_syscall_tbl){
-		printk("%s: failed to find the sys_call_table\n",MODNAME);
 		return -1;
 	}
 
 	j=0;
 	for(i=0;i<ENTRIES_TO_EXPLORE;i++)
 		if(hacked_syscall_tbl[i] == hacked_ni_syscall){
-			printk("%s: found sys_ni_syscall entry at syscall_table[%d]\n",MODNAME,i);
 			free_entries[j++] = i;
 			if(j>=MAX_FREE) break;
 		}
@@ -851,15 +817,12 @@ int init_module(void) {
     hacked_syscall_tbl[free_entries[3]] = (unsigned long*)sys_tag_ctl;
  	/*for(i=0;i<HACKED_ENTRIES;i++){
                 ((unsigned long *)hacked_syscall_tbl)[free_entries[i]] = (unsigned long*)new_sys_call_array[i];
-                printk("%s: sys call numero  %d\n",MODNAME,free_entries[i]);
 
     }*/
  	protect_memory();
-	//printk("%s: a sys_call with 2 parameters has been installed as a trial on the sys_call_table at displacement %d\n",MODNAME,FIRST_NI_SYSCALL);	
 #else
 #endif
 
-    printk("%s: module correctly mounted\n",MODNAME);
     return 0;
 
 }

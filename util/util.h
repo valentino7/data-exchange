@@ -102,12 +102,13 @@ struct _tag_level_group{
     unsigned long num_thread __attribute__((aligned(8)));
     char kernel_buff[MAX_MSG_SIZE];
     spinlock_t lock_presence_counter;
+    wait_queue_head_t my_queue;
 };
 
 struct _tag_level{
     int level_awake  ;
     unsigned long num_thread __attribute__((aligned(8)));
-    wait_queue_head_t my_queue;
+
     struct _tag_level_group* group;
     //spinlock_t queue_lock;
     rwlock_t level_lock;
