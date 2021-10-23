@@ -16,9 +16,8 @@
 * 	 of the sys_call_table and the address of sys_ni_syscall so that they can be exploited for
 * 	 rewriting sys_call_table and adding new system calls to Linux
 *
-* @author Francesco Quaglia
+* @author Valentino Perrone
 *
-* @date October 20, 2019
 */
 
 #define EXPORT_SYMTAB
@@ -46,8 +45,8 @@
 
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Francesco Quaglia <quaglia@dis.uniroma1.it>");
-MODULE_DESCRIPTION("system call table hacker");
+MODULE_AUTHOR("Valentino Perrone <perrone.valentino@gmail.com>");
+MODULE_DESCRIPTION("DATA_EXCHANGE");
 
 #define MODNAME "DATA-EXCHANGE"
 
@@ -136,7 +135,7 @@ int get_entries(int entry_ids[], int num_acquires, unsigned long *sys_call_table
 				if(ret == num_acquires){
 					goto found_available_entries;
 				}
-				return -1;	
+				return -1;
 			}
                 }
         }

@@ -1,12 +1,3 @@
-/* SPDX-License-Identifier: GPL-2.0 */
-/*
- * linux/ipc/util.h
- * Copyright (C) 1999 Christoph Rohland
- *
- * ipc helper functions (c) 1999 Manfred Spraul <manfred@colorfullife.com>
- * namespaces support.      2006 OpenVZ, SWsoft Inc.
- *                               Pavel Emelianov <xemul@openvz.org>
- */
 #ifndef _IPC_UTIL_H
 #define _IPC_UTIL_H
 
@@ -119,7 +110,7 @@ struct _tag_level{
 typedef struct _tag_elem{
     struct kern_ipc_perm q_perm;
     struct _tag_level* level;
-    int num_thread_per_tag __attribute__((aligned(8)));
+//    int num_thread_per_tag __attribute__((aligned(8)));
     rwlock_t tag_lock;
     pid_t pid_creator;
 //    int tag;
@@ -154,7 +145,7 @@ void ipc_init_proc_interface(const char *path, const char *header, int (*show)(s
 #endif
 
 //void ipc_init_proc_interface(const char *path, const char *header, int ids, int (*show)(struct seq_file *, void *));
-static int sysvipc_proc_show(struct seq_file *s , void * it);
+int sysvipc_proc_show(struct seq_file *s , void * it);
 void ipc_init(void);
 
 
@@ -165,8 +156,12 @@ void ipc_init(void);
 /* must be called with ids->rwsem acquired for writing */
 int ipc_addid(struct kern_ipc_perm *, int);
 
+int remove_object(int id, void* p, void* data);
+
 /* must be called with both locks acquired. */
 void ipc_rmid( struct kern_ipc_perm *);
+
+
 
 /* must be called with both locks acquired. */
 void ipc_set_key_private( struct kern_ipc_perm *);
@@ -201,6 +196,7 @@ static inline int ipc_get_maxidx(struct ipc_ids *ids)
  * must be used.
  */
 bool ipc_rcu_getref(struct kern_ipc_perm *ptr);
+void msg_rcu_free(struct rcu_head *head);
 void ipc_rcu_putref(struct kern_ipc_perm *ptr,
 			void (*func)(struct rcu_head *head));
 

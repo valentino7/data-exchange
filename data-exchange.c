@@ -1,22 +1,16 @@
 /*
-* 
+*
 * This is free software; you can redistribute it and/or modify it under the
 * terms of the GNU General Public License as published by the Free Software
 * Foundation; either version 3 of the License, or (at your option) any later
 * version.
-* 
+*
 * This module is distributed in the hope that it will be useful, but WITHOUT ANY
 * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 * A PARTICULAR PURPOSE. See the GNU General Public License for more details.
-* 
-* @file usctm.c 
-* @brief This is the main source for the Linux Kernel Module which implements
-* 	 the runtime discovery of the syscall table position and of free entries (those 
-* 	 pointing to sys_ni_syscall) 
 *
-* @author Francesco Quaglia
+* @author Valentino Perrone
 *
-* @date November 22, 2020
 */
 
 #define EXPORT_SYMTAB
@@ -72,7 +66,6 @@
 #include <linux/msg.h>
 #include "./util/util.h"
 #include <asm/unistd.h>
-//TODO TEST
 #include <linux/delay.h>
 //#include "./include/vtpmo.h"
 
@@ -84,57 +77,55 @@ MODULE_DESCRIPTION("DATA_EXCHANGE");
 #define MODNAME "DATA-EXCHANGE"
 static DEFINE_MUTEX(log_get_mutex);
 
-unsigned long *hacked_ni_syscall=NULL;
-unsigned long **hacked_syscall_tbl=NULL;
-#define ENTRIES_TO_EXPLORE 256
-char  kernel_buff[MAX_MSG_SIZE];
-
-
-extern int syscall_table_finder(unsigned long **, unsigned long ***);
-
-#define MAX_FREE 4
-int free_entries[MAX_FREE];
-module_param_array(free_entries,int,NULL,0660);//default array size already known - here we expose what entries are free
-//unsigned long new_sys_call_array[] = {(unsigned long)sys_tag_get,(unsigned long)sys_tag_send,(unsigned long)sys_tag_receive,(unsigned long)sys_tag_cmd};
-//#define HACKED_ENTRIES (int)(sizeof(new_sys_call_array)/sizeof(int))
-#define HACKED_ENTRIES 4
-int restore[HACKED_ENTRIES] = {[0 ... (HACKED_ENTRIES-1)] -1};
-unsigned long new_sys_call_array[4];
-//struttura TAG
-//static int enable_sleep = 1;// this can be configured at run time via the sys file system - 1 meas any sleeping thread is freezed
-//module_param(enable_sleep,int,0660);
-//
-//unsigned long count __attribute__((aligned(8)));//this is used to audit how many threads are still sleeping onto the sleep/wakeup queue
-//module_param(count,ulong,0660);
 
 
 
 
-typedef struct _packed_work{
-    void* buffer;
-    long code;
-    struct work_struct the_work;
-} packed_work;
-
-//elem head = {NULL,-1,-1,NULL,NULL,NULL,NULL};
-//elem tail = {NULL,-1,-1,NULL,NULL,NULL,NULL};
-
-//lista RCU
-//static LIST_HEAD(list_tag_rcu);
-//static spinlock_t list_tag_lock;
-
-
-struct ipc_ids *ids;
+int send_msg(int, int, char*, size_t);
+struct _tag_elem* check_and_get_tag_if_exists(int);
+int tag_ctl(int, int);
+int tag_get(struct ipc_params);
+int tag_receive(int, int, char*, size_t);
+void remove_all(void);
 
 
 
+//Rimozione di tutti i tag aperti
+void remove_all(){
 
-void free_mem(unsigned long data){
+    idr_for_each(&(ids->ipcs_idr), &remove_object, NULL);
+    rhashtable_destroy(&(ids->key_ht));
 
-    printk("free mem da implementare");
-//    kfree((void*)container_of(data,packed_work,the_work));
-//    module_put(THIS_MODULE);
+}
 
+
+
+
+
+int check_permission(int permission,  kuid_t euid){
+    kuid_t ceuid;
+    ceuid = current_euid();
+
+
+    if( (permission==RESTRICT &&  uid_eq(euid, ceuid)) || permission == NO_RESTRICT)
+        return 1;
+    return -1;
+
+}
+
+struct _tag_elem* check_and_get_tag_if_exists(int id){
+    struct kern_ipc_perm *ipcp = ipc_obtain_object_idr(id);
+    if (IS_ERR(ipcp)){
+        printk("non esiste");
+        return ERR_CAST(ipcp);
+    }
+    //prendo l'ultimo bit con &1
+    //restituisco errore in caso non ci siano permessi
+    if(check_permission(ipcp->mode&1, ipcp-> cuid ) == -1) {
+        return  ERR_PTR(-EPERM);
+    }
+
+    return container_of(ipcp, struct _tag_elem, q_perm);
 }
 
 char* load_msg(char* buffer, int size){
@@ -150,32 +141,17 @@ char* load_msg(char* buffer, int size){
     return addr;
 }
 
-int check_permission(int permission,  kuid_t euid){
-    kuid_t ceuid;
-    ceuid = current_euid();
-
-
-    if( (permission==RESTRICT &&  euid.val == ceuid.val) || permission == NO_RESTRICT)
-        return 1;
-    return -1;
-
-}
-
-struct _tag_elem* check_and_get_tag_if_exists(int id){
-    struct kern_ipc_perm *ipcp = ipc_obtain_object_idr(id);
-    if (IS_ERR(ipcp)){
-        return ERR_CAST(ipcp);
-    }
-    //prendo l'ultimo bit con &1
-    //restituisco errore in caso non ci siano permessi
-    if(check_permission(ipcp->mode&1, ipcp-> cuid ) == -1) {
-        return  ERR_PTR(-EPERM);
-    }
-
-    return container_of(ipcp, struct _tag_elem, q_perm);
+/* Implementazione della sys-call send
+ *
+*/
+int tag_get(struct ipc_params params) {
+    return ipcget(&params);
 }
 
 
+/* Implementazione della sys-call send
+ *
+*/
 int send_msg(int tag, int level, char* buffer, size_t size){
 
     void* addr;
@@ -196,7 +172,7 @@ int send_msg(int tag, int level, char* buffer, size_t size){
 
     if (IS_ERR(msq)) {
         err = PTR_ERR(msq);
-        goto out_unlock1;
+        goto out_unlock;
     }
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -208,7 +184,8 @@ int send_msg(int tag, int level, char* buffer, size_t size){
     new_group = kmalloc(sizeof(struct _tag_level_group), GFP_KERNEL);
     if (new_group == NULL)
     {
-        return -ENOMEM;
+        err = -ENOMEM;
+        goto out_unlock;
     }
     write_lock(&(msq->level[level].level_lock));
     //controllo se il tag è stato eliminato
@@ -216,8 +193,8 @@ int send_msg(int tag, int level, char* buffer, size_t size){
     if(count== -1 || count==1){
         //NON CI SONO THREAD IN ATTESA
         write_unlock(&msq->level[level].level_lock);
-        rcu_read_unlock();
-        return 1;
+        err = 0;
+        goto out_unlock;
     }
 
     copy = msq->level[level].group;
@@ -230,18 +207,15 @@ int send_msg(int tag, int level, char* buffer, size_t size){
     rcu_read_unlock();
 
     //SCRIVO MEMORIA CONDIVISA
-//    mutex_lock(&log_get_mutex);
     memcpy((char *) copy->kernel_buff, (char *) addr, size - ret);
 
     copy->kernel_buff[size - ret] = '\0';
-    //    valid = size - ret;
-//    mutex_unlock(&log_get_mutex);
+
     free_pages((unsigned long) addr, 0);
 
     //INFINE SVEGLIO I THREAD
     copy->awake = 0;
-    wake_up(&copy->my_queue);
-//    rcu_read_unlock();
+    wake_up(&(copy->my_queue));
 
     return size - ret;
 
@@ -249,45 +223,111 @@ int send_msg(int tag, int level, char* buffer, size_t size){
 //    bad_size:
 //    return -1;
 
-    out_unlock1:
+    out_unlock:
     rcu_read_unlock();
     if (msq != NULL)
         free_pages((unsigned long) addr, 0);
     return err;
 }
 
-//GESTIONE THREAD
-struct global_data {
-    wait_queue_head_t wq;
-    atomic_t thread_count;
-    int error[32];
-    int tag;
-    int level;
-};
+//static void msg_rcu_free(struct rcu_head *head)
+//{
+//    struct kern_ipc_perm *p = container_of(head, struct kern_ipc_perm, rcu);
+//    msg_queue *msq = container_of(p, msg_queue, q_perm);
+//
+////    security_msg_queue_free(msq);
+//
+//    kfree(msq);
+//
+//}
+
+/*
+ * freeque() wakes up waiters on the sender and receiver waiting queue,
+ * removes the message queue from message queue ID IDR, and cleans up all the
+ * messages associated with this queue.
+ *
+ * msg_ids.rwsem (writer) and the spinlock for this message queue are held
+ * before freeque() is called. msg_ids.rwsem remains locked on exit.
+ */
+static void freeque( struct kern_ipc_perm *ipcp, msg_queue *msq)
+{
+
+//    msg_queue *msq = container_of(ipcp,  msg_queue, q_perm);
+
+    /* DEFINE_WAKE_Q(wake_q);
+
+     expunge_all(msq, -EIDRM, &wake_q);
+     ss_wakeup(msq, &wake_q, true);*/
+    ipc_rmid( &(msq->q_perm));
+    //  ipc_unlock_object(&msq->q_perm);
+//    wake_up_q(&wake_q);
+    write_unlock(&(msq->tag_lock));
+    rcu_read_unlock();
+
+    /* list_for_each_entry_safe(msg, t, &msq->q_messages, m_list) {
+         atomic_dec(&ns->msg_hdrs);
+         free_msg(msg);
+     }
+     atomic_sub(msq->q_cbytes, &ns->msg_bytes);*/
+
+    //reclamo memoria quando i read lock che intaccano questa struttura sono finiti
+    ipc_rcu_putref(&(msq->q_perm), msg_rcu_free);
 
 
-int wrapper_thread_send (void* data) {
-    struct global_data *gd;
-    //level uguale id thread
-    int level;
-    char* buff ;
+}
+int remove_tag(int tag){
 
-    gd= (struct global_data *) data;
-    level = gd->level;
-    buff= "\0";
-    //gd->error[level] = send_msg(gd->tag, gd->level, buff, 0);
+    //incremento contatore atomic per tag di accessi
+    struct kern_ipc_perm *ipcp;
+    msg_queue *msq;
+    int err;
+    down_write(&(ids->rwsem));
+    rcu_read_lock();
 
-    atomic_dec(&gd->thread_count);
-    //wake_up(&gd->wq);
+    msq = check_and_get_tag_if_exists(tag);
 
-    return 0;
+    if (IS_ERR(msq) || msq == NULL) {
+        err = PTR_ERR(msq);
+        rcu_read_unlock();
+        up_write(&(ids->rwsem));
+        return err;
+    }
+
+    /* err = security_msg_queue_msgctl(msq, cmd);
+     if (err)
+         goto out_unlock1;*/
+
+//    ipc_lock_object(&msq->q_perm);
+
+    //se non ci sonor reader chiudo il gate d entrata nella receive
+    //i receiver che arrivano falliscono perche sto eliminando il nodo
+    if (!write_trylock(&(msq->tag_lock))) {
+        //lock occupato dai waiters
+        rcu_read_unlock();
+        up_write(&(ids->rwsem));
+        return -1;
+    }
+    //se c è solo un reader posso eliminare
+    if( atomic_cmpxchg(&(msq->q_perm.refcount.refs), 1, -1) == 1){
+        /* freeque unlocks the ipc object and rcu */
+        freeque(ipcp, msq);
+        up_write(&(ids->rwsem));
+    }else{
+        // if(refcount_read(&msq->q_perm.refcount) != 1){
+        //ipc_unlock_object(&msq->q_perm);
+        write_unlock(&(msq->tag_lock));
+        rcu_read_unlock();
+        up_write(&(ids->rwsem));
+        return -1;
+    }
+    return 1;
 }
 
 int awake_all(int tag){
-    struct global_data gd;
-    struct task_struct *kthread;
+//    struct global_data gd;
+//    struct task_struct *kthread;
     int i;
-    int ret;
+//    int ret;
 
     for(i=0; i!=32; i++) {
         send_msg(tag, i, "\0", 0);
@@ -313,223 +353,32 @@ int awake_all(int tag){
 
     return 1;
 }
-
-static void msg_rcu_free(struct rcu_head *head)
-{
-    struct kern_ipc_perm *p = container_of(head, struct kern_ipc_perm, rcu);
-    msg_queue *msq = container_of(p, msg_queue, q_perm);
-
-//    security_msg_queue_free(msq);
-
-    kfree(msq);
-
-}
-/*
- * freeque() wakes up waiters on the sender and receiver waiting queue,
- * removes the message queue from message queue ID IDR, and cleans up all the
- * messages associated with this queue.
+/* Implementazione della sys-call tag_ctl
  *
- * msg_ids.rwsem (writer) and the spinlock for this message queue are held
- * before freeque() is called. msg_ids.rwsem remains locked on exit.
- */
-static void freeque( struct kern_ipc_perm *ipcp)
-{
+*/
+int tag_ctl(int command, int tag){
+    switch (command) {
+        case AWAKE_ALL:
+            return awake_all(tag);
 
-    msg_queue *msq = container_of(ipcp,  msg_queue, q_perm);
-
-    /* DEFINE_WAKE_Q(wake_q);
-
-     expunge_all(msq, -EIDRM, &wake_q);
-     ss_wakeup(msq, &wake_q, true);*/
-
-    ipc_rmid( &msq->q_perm);
-
-  //  ipc_unlock_object(&msq->q_perm);
-//    wake_up_q(&wake_q);
-    write_unlock(&msq->tag_lock);
-    rcu_read_unlock();
-
-   /* list_for_each_entry_safe(msg, t, &msq->q_messages, m_list) {
-        atomic_dec(&ns->msg_hdrs);
-        free_msg(msg);
+        case REMOVE:
+            return remove_tag(tag);
     }
-    atomic_sub(msq->q_cbytes, &ns->msg_bytes);*/
-
-    //reclamo memoria quando i read lock che intaccano questa struttura sono finiti
-    ipc_rcu_putref(&msq->q_perm, msg_rcu_free);
-
-    call_rcu(&msq->q_perm.rcu, msg_rcu_free);
+    return -1;
 }
 
+/* Implementazione della sys-call tag_receive
+ *
+*/
+int tag_receive(int tag, int level, char* buffer, size_t size){
 
-
-
-
-int remove_tag(int tag){
-
-    //incremento contatore atomic per tag di accessi
-    struct kern_ipc_perm *ipcp;
-    msg_queue *msq;
-    int err;
-    down_write(&ids->rwsem);
-    rcu_read_lock();
-
-    ipcp = ipcctl_obtain_check( tag);
-    if (IS_ERR(ipcp)) {
-        err = PTR_ERR(ipcp);
-        rcu_read_unlock();
-        up_write(&ids->rwsem);
-        return err;
-//        goto out_unlock1;
-    }
-    msq = container_of(ipcp, msg_queue, q_perm);
-
-   /* err = security_msg_queue_msgctl(msq, cmd);
-    if (err)
-        goto out_unlock1;*/
-
-//    ipc_lock_object(&msq->q_perm);
-
-    //se non ci sonor reader chiudo il gate d entrata nella receive
-    //i receiver che arrivano falliscono perche sto eliminando il nodo
-    if (!write_trylock(&msq->tag_lock)) {
-        //lock occupato dai waiters
-        rcu_read_unlock();
-        up_write(&ids->rwsem);
-        return -1;
-    }
-    //se c è solo un reader posso eliminare
-    if( atomic_cmpxchg(&msq->q_perm.refcount.refs, 1, -1) == 1){
-        /* freeque unlocks the ipc object and rcu */
-        freeque(ipcp);
-        up_write(&ids->rwsem);
-    }else{
-   // if(refcount_read(&msq->q_perm.refcount) != 1){
-        //ipc_unlock_object(&msq->q_perm);
-        write_unlock(&msq->tag_lock);
-        rcu_read_unlock();
-        up_write(&ids->rwsem);
-        return -1;
-    }
-    return 1;
-}
-
-
-
-#ifdef CONFIG_PROC_FS
-static int sysvipc_msg_proc_show(struct seq_file *s, void *it)
-{
-//	struct user_namespace *user_ns = seq_user_ns(s);
-	struct kern_ipc_perm *ipcp = it;
-	struct _tag_elem *msq = container_of(ipcp, struct _tag_elem, q_perm);
-    int i=0;
-    for (i = 0; i<32; i++){
-        seq_printf(s,
-               "%10d %10d %10d %10ld  \n",
-               msq->q_perm.key,
-               msq->pid_creator,
-               i,
-               msq->level[i].group->num_thread
-             );
-    }
-
-	return 0;
-}
-#endif
-
-
-
-#define SYS_CALL_INSTALL
-
-#ifdef SYS_CALL_INSTALL
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
-__SYSCALL_DEFINEx(3, _tag_get, int, key, int, command, int, permission){
-#else
-asmlinkage int sys_tag_get(int key, int command, int permission){
-#endif
-    int result;
-    int cmd_permission;
-    struct ipc_params params;
-
-    if (permission != RESTRICT && permission != NO_RESTRICT ){
-        return -1;
-    }
-
-    params.key=key;
-    //shift di uno il command per salvare insieme anche le permission
-    command = command <<1;
-    cmd_permission = command + permission;
-    params.flg = cmd_permission;
-
-    result = ipcget(&params);
-
-
-    return result;
-
-}
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
-static unsigned long sys_tag_get = (unsigned long) __x64_sys_tag_get;
-#else
-#endif
-
-
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
-__SYSCALL_DEFINEx(4, _tag_send, int, tag, int, level, char*, buffer, size_t, size){
-#else
-    /*scrivo area condivisa
-     * lock on wait queue e leggo atomic counter svegliando poi i thread dormienti e unlock
-     * while var local atomic counter == version reader*/
-asmlinkage int sys_tag_send(int tag, int level, char* buffer, size_t size){
-#endif
-
-
-    //void* addr;
-
-
-//    p->level[level].awake=0;
-
-    //read lock sulla lettura
-    //TODO CHECK SULLA PERMISSION
-
-    //trade off tra sicurezza e velocità
-    if (size >= (MAX_MSG_SIZE - 1) || (long) size < 0 || tag < 0 || level > 31 || level < 0)
-//        goto bad_size;//leave 1 byte for string terminator
-        return -1;
-    return send_msg(tag, level, buffer, size);
-
-}
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
-static unsigned long sys_tag_send = (unsigned long) __x64_sys_tag_send;
-#else
-#endif
-
-
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
-__SYSCALL_DEFINEx(4, _tag_receive, int, tag, int, level, char*, buffer, size_t, size){
-#else
-asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
-#endif
-
-    struct _tag_elem * msq;
-
-
+    struct _tag_elem *msq;
     struct _tag_level_group* copy;
-    unsigned long ret;
     int err;
-
+    int ret;
     void* addr;
-    //packed_work *the_task;
-
-
-    //trade off tra sicurezza e velocità
-    if (size >= (MAX_MSG_SIZE - 1) || (long) size < 0 || tag < 0 || level > 31 || level < 0)
-        goto bad_size;//leave 1 byte for string terminator
 
     rcu_read_lock();
-
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //Viene acquisita la message queue se esiste
     msq= check_and_get_tag_if_exists(tag);
@@ -538,9 +387,8 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
     if (IS_ERR(msq)) {
         //TODO USARE REFERENCE COUNT
         //atomic_dec((atomic_t*)&msq->num_thread_per_tag);
-        rcu_read_unlock();
-        return PTR_ERR(msq);
-        // goto out_unlock;
+        err = PTR_ERR(msq);
+        goto out_unlock;
     }
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -550,13 +398,13 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
     //serve read lock perchè se dealloco la struttura p, non posso piu accedere alla variabile lock
     //sezione critica condivisa con remover con contatore atomico per tag di accessi
 //    spin_lock(&msq->q_perm.);
-   //TODO attenzione ipc_lock_object(&msq->q_perm);
-    while(!read_trylock(&msq->tag_lock)) {
+    //TODO attenzione ipc_lock_object(&msq->q_perm);
+    while(!read_trylock(&(msq->tag_lock))) {
         //lock occupato dall eliminatore
         //controllo se il tag è stato eliminato, in caso positivo termino
-        if(atomic_read(&msq->q_perm.refcount.refs)==-1){
-            rcu_read_unlock();
-            return -1;
+        if(atomic_read(&(msq->q_perm.refcount.refs))==-1){
+            err = -1;
+            goto out_unlock;
         }
     }
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -573,12 +421,11 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
 
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //INCREMENTO REF se va tutto bene
-    if (!ipc_rcu_getref(&msq->q_perm)) {
+    if (!ipc_rcu_getref(&(msq->q_perm))) {
         err = -EIDRM;
         //TODO attenzione ipc_unlock_object(&msq->q_perm);
-        read_unlock(&msq->tag_lock);
-        rcu_read_unlock();
-        return err;
+        read_unlock(&(msq->tag_lock));
+        goto out_unlock;
     }
 
     // check se contator è -1 serve per fare la remove atomica che
@@ -596,13 +443,13 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
 
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //COPIATURA DELL'AREA DI MEMORIA
-    read_lock(&msq->level[level].level_lock);
+    read_lock(&(msq->level[level].level_lock));
     copy = msq->level[level].group ;
     //LETTURA E INCREMENTO NUMERO READERS PER IL GROUP PER IPLEMENTARE IL RILASCIO DELLA MEMORIA
 
 
     atomic_inc((atomic_t*)&copy->num_thread);//a new reader
-    read_unlock(&msq->level[level].level_lock);
+    read_unlock(&(msq->level[level].level_lock));
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 
@@ -614,9 +461,9 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
     //spin_unlock(&p->level[level].level_lock);
     if(copy->awake == 1){
 
-        read_unlock(&msq->tag_lock);
-        rcu_read_unlock();
-        return -EINTR;
+        read_unlock(&(msq->tag_lock));
+        err = -EINTR;
+        goto out_unlock;
     }
 
     //prima leggo poi decremento
@@ -627,18 +474,15 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
     //TODO da ragionare sulla posizione di questi rilasci
     //decremento il refcount
 
-    ipc_rcu_putref(&msq->q_perm, msg_rcu_free);
-    read_unlock(&msq->tag_lock);
+
+    read_unlock(&(msq->tag_lock));
     rcu_read_unlock();
 
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //INIZIO LETTURA MEMORIA CONDIVISA
 
 
-    if(size > MAX_MSG_SIZE) goto bad_size;
-
     addr = (void*)get_zeroed_page(GFP_KERNEL);
-
     if (addr == NULL) return -1;
 
 //    mutex_lock(&log_get_mutex);
@@ -672,8 +516,7 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
 
     //ULtimo chiude la porta (rimuove la memoria).
     if(atomic_dec_and_test((atomic_t*)&copy->num_thread) ){
-        kfree(copy);
-        copy = NULL;
+        kvfree(copy);
     }//a new sleeper
 //    spin_lock(&copy->lock_presence_counter);
     /* if (copy->num_thread==0){
@@ -683,165 +526,9 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
      }*/
     //spin_unlock(&copy->lock_presence_counter);
 
+    return size - ret;
 
-
-    return strlen(buffer);
-    bad_size:
-
-    return -1;
-
-
-    //mi attesto su un nodo
-    //stampo tutti i nodi
-//    print_list_tag(tag);
-
-    //vado in sleep al livello level
-
-
-
-}
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
-static unsigned long sys_tag_receive = (unsigned long) __x64_sys_tag_receive;
-#else
-#endif
-
-
-
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
-__SYSCALL_DEFINEx(2, _tag_ctl, int, tag, int, command){
-#else
-asmlinkage int sys_tag_ctl(int tag, int command){
-#endif
-    //TODO PERMISSION CHECK
-    //struct _tag_elem* p;
-    //rcu_read_lock();
-    //rcu_read_unlock();
-//    int err;
-
-    //if (p!=NULL) {
-    switch (command) {
-        case AWAKE_ALL:
-            return awake_all(tag);
-//            if(awake_all(tag) == -1){
-//                return -1;
-//            }
-//
-
-//            break;
-        case REMOVE:
-            return remove_tag(tag);
-//            if (err < 0){
-//                return -1;
-//            }
-//            return 1;
-//            break;
-    }
-//    }else{
-//    }
-
-
-    return 0;
-}
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
-static unsigned long sys_tag_ctl = (unsigned long) __x64_sys_tag_ctl;
-#else
-#endif
-
-
-unsigned long cr0;
-
-static inline void
-write_cr0_forced(unsigned long val)
-{
-    unsigned long __force_order;
-
-    /* __asm__ __volatile__( */
-    asm volatile(
-    "mov %0, %%cr0"
-    : "+r"(val), "+m"(__force_order));
-}
-
-static inline void
-protect_memory(void)
-{
-    write_cr0_forced(cr0);
-}
-
-static inline void
-unprotect_memory(void)
-{
-    write_cr0_forced(cr0 & ~X86_CR0_WP);
-}
-
-
-
-#else
-#endif
-
-
-int init_module(void) {
-
-	int i,j;
-
-
-    ipc_init_ids();
-
-    ipc_init_proc_interface("sysvipc/dataExchange","       TAG-key TAG-creator TAG-level Waiting-threads \n", sysvipc_msg_proc_show);
-
-//    ipc_init_proc_interface("sysvipc/dataExchange","       TAG-key      msqid\n", sysvipc_msg_proc_show);
-    //spin_lock_init(&list_tag_lock);
-
-    //Doppio puntatore che punta all'array che mantiene dentro le system call libere
-    syscall_table_finder(&hacked_ni_syscall, &hacked_syscall_tbl);
-
-	if(!hacked_syscall_tbl){
-		return -1;
-	}
-
-	j=0;
-	for(i=0;i<ENTRIES_TO_EXPLORE;i++)
-		if(hacked_syscall_tbl[i] == hacked_ni_syscall){
-			free_entries[j++] = i;
-			if(j>=MAX_FREE) break;
-		}
-
-#ifdef SYS_CALL_INSTALL
-	cr0 = read_cr0();
-	unprotect_memory();
-    hacked_syscall_tbl[free_entries[0]] = (unsigned long*)sys_tag_get;
-    hacked_syscall_tbl[free_entries[1]] = (unsigned long*)sys_tag_send;
-    hacked_syscall_tbl[free_entries[2]] = (unsigned long*)sys_tag_receive;
-    hacked_syscall_tbl[free_entries[3]] = (unsigned long*)sys_tag_ctl;
- 	/*for(i=0;i<HACKED_ENTRIES;i++){
-                ((unsigned long *)hacked_syscall_tbl)[free_entries[i]] = (unsigned long*)new_sys_call_array[i];
-
-    }*/
- 	protect_memory();
-#else
-#endif
-
-    return 0;
-
-}
-
-void cleanup_module(void) {
-    int i;
-#ifdef SYS_CALL_INSTALL
-	cr0 = read_cr0();
-        unprotect_memory();
-        //hacked_syscall_tbl[FIRST_NI_SYSCALL] = (unsigned long*)hacked_ni_syscall;
-
- 	for(i=0;i<HACKED_ENTRIES;i++){
-                ((unsigned long *)hacked_syscall_tbl)[free_entries[i]] = (unsigned long)hacked_ni_syscall;
-        }
-        protect_memory();
-#else
-#endif
-//    free_list();
-//    print_list_tag(8);
-    printk("%s: shutting down\n",MODNAME);
-    remove_proc_entry("sysvipc/dataExchange",NULL);
+    out_unlock:
+    rcu_read_unlock();
+    return err;
 }

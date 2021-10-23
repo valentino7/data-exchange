@@ -9,7 +9,7 @@
 * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
 * A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 * 
-* @author Francesco Quaglia
+* @author Valentino Perrone
 *
 */
 
@@ -37,10 +37,11 @@
 #include <asm/io.h>
 
 MODULE_LICENSE("GPL");
-MODULE_AUTHOR("Francesco Quaglia <francesco.quaglia@uniroma2.it>");
-MODULE_DESCRIPTION("discovers the validity of virtual to physical mapping starting from a virtual address passed in input");
+MODULE_AUTHOR("Valentino Perrone <perrone.valentino@gmail.com>");
+MODULE_DESCRIPTION("DATA_EXCHANGE");
 
-#define MODNAME "VTMPO"
+
+#define MODNAME "DATA-EXCHANGE"
 
 
 int sys_vtpmo(unsigned long vaddr);

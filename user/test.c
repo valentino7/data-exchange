@@ -207,10 +207,8 @@ void *threadReceiversFun(void *vargp) {
     printf("result %d tag %d level %d stringa ricevuta %s \n", receive_result, params_rec->tag, params_rec->level, buffer);
 
     pthread_mutex_lock(&lock);
-    printf("preso lock rec %d \n", num_thread);
     num_thread++;
     pthread_mutex_unlock(&lock);
-    printf("lasciato lock rec \n");
 }
 
 
@@ -252,11 +250,8 @@ void *threadSendersFun(void *vargp) {
             break;
         }
         pthread_mutex_unlock(&lock);
-
-        printf("lasciato lock send \n");
     }
     pthread_mutex_unlock(&lock);
-    printf("lasciato lock send \n");
 }
 
 /* Test più complesso, vengono saturati tutti i tag e tutti i livelli (da -1 a 33)
@@ -623,21 +618,79 @@ void test_tag_remove_awake_multithread(){
 
 }
 
+
+
+
+void test_tag_remove(){
+    int tag_1 = sys_tag_get(2, IPC_CREAT, RESTRICT);
+    printf("tag: %d \n", tag_1);
+
+//    for (int i=1; i!=3; i++){
+//        int pid;
+//        pid=fork();  // creo un nuovo processo
+//        if(pid<0)    exit(1);  // errore, duplicazione non eseguita
+//        else  {
+//            if(pid==0) {
+//                char* buffer = malloc(10);
+//                int receive_result= sys_tag_receive(tag_1, i, buffer, 10);
+//                printf("result %d INDICE %d stringa ricevuta %s \n", receive_result, i, buffer);
+//                return;
+//            }
+//        }
+//    }
+
+    int result = sys_tag_ctl(tag_1, REMOVE);
+    printf("risultato aspettato dalla rimozione di tag_1 è 1:%d  \n", result);
+
+    //AWAKE ALL tag_1
+//    sys_tag_ctl(tag_1, AWAKE_ALL);
+//
+//    while (wait(&status)>0);
+
+    //il tag_1 è ora rimovibile avendo fatto terminare i thread
+//    result = sys_tag_ctl(tag_1, REMOVE);
+//    printf("risultato aspettato dalla rimozione di tag_1 è 1: %d  \n", result);
+//
+//
+//    //il tag_2 è rimovibile perchè non ha thread in attesa
+//    result = sys_tag_ctl(tag_2, REMOVE);
+//    printf("risultato aspettato dalla rimozione di tag_2 è 1: %d  \n", result);
+//    result = sys_tag_ctl(tag_2, REMOVE);
+//    printf("RIPROVO risultato aspettato dalla rimozione di tag_2 è 1: %d  \n", result);
+//    result = sys_tag_ctl(tag_2, REMOVE);
+//    printf("RIPROVO risultato aspettato dalla rimozione di tag_2 è 1: %d  \n", result);
+//
+//
+//    //provo a riaprire il tag per vedere se è chiuso davvero
+//    int tag_3 = sys_tag_get(3, IPC_EXCL, RESTRICT);
+//    printf("Avendo rimosso il tag mi aspetto che il risultato dell'apertura sia -1: %d \n", tag_3);
+}
+
+
 int main(int argc, char** argv){
 
     //test_tag_get();
 
-    //test_tag_send_receive();
+//    test_tag_send_receive();
 
     //test_sr_multiple_receivers_single_taglevel();
 
-    //test_sr_multithread_rec_send_alltag_alllevel();
+//    test_sr_multithread_rec_send_alltag_alllevel();
 
     //test_sr_multithread_multipleSender_multipleRec_per_level();
 
+//    test_tag_remove();
+
     //test_tag_remove_awake();
 
-    test_tag_remove_awake_multithread();
+//    test_tag_remove_awake_multithread();
+    int tag = sys_tag_get(2, IPC_CREAT, RESTRICT);
+    printf("tag: %d \n", tag);
+
+
+
+    int result = sys_tag_ctl(tag, REMOVE);
+    printf("risultato aspettato dalla rimozione di tag_1 è -1:%d  \n", result);
 
 
     return 0;
