@@ -311,7 +311,6 @@ msg_queue* alloc_and_fill_tag_service(void) {
     //inizializzo le 32 wait queue
     rwlock_init(&(new->tag_lock));
 
-//    new->num_thread_per_tag=0;
     for (i = 0; i < 32; i++) {
 
         new->level[i].group = kmalloc(sizeof(struct _tag_level_group), GFP_KERNEL);
@@ -321,12 +320,8 @@ msg_queue* alloc_and_fill_tag_service(void) {
             return ERR_PTR(-ENOMEM);
         }
 
-
-//        spin_lock_init(&new->level[i].level_lock);
         rwlock_init(&(new->level[i].level_lock));
 
-//        spin_lock_init(&new->level[i].level_lock);
-        spin_lock_init(&(new->level[i].group->lock_presence_counter));
 
         new->level[i].group->awake = 1;
         init_waitqueue_head(&(new->level[i].group->my_queue));
@@ -470,11 +465,8 @@ static void ipc_kht_remove( struct kern_ipc_perm *ipcp)
 }
 
 void free_item(void *ptr, void* arg){
-//    struct rhashtable_params *ipcp = ptr;
-//    ipc_rmid(ptr);
     kvfree(ptr);
     ptr=NULL;
-//    ipcp->deleted = true;
 }
 
 int remove_object(int id, void* p, void* data){
@@ -493,7 +485,6 @@ int remove_object(int id, void* p, void* data){
 
 /**
  * ipc_rmid - remove an ipc identifier
- * @ids: ipc identifier set
  * @ipcp: ipc perm structure containing the identifier to remove
  *
  * ipc_ids.rwsem (as a writer) and the spinlock for this ID are held
@@ -520,7 +511,6 @@ void ipc_rmid( struct kern_ipc_perm *ipcp)
 
 /**
  * ipc_set_key_private - switch the key of an existing ipc to IPC_PRIVATE
- * @ids: ipc identifier set
  * @ipcp: ipc perm structure containing the key to modify
  *
  * ipc_ids.rwsem (as a writer) and the spinlock for this ID are held
@@ -542,7 +532,6 @@ void msg_rcu_free(struct rcu_head *head)
     struct kern_ipc_perm *p = container_of(head, struct kern_ipc_perm, rcu);
     msg_queue *msq = container_of(p, msg_queue, q_perm);
 
-//    security_msg_queue_free(msq);
 
     kvfree(msq->level);
     kvfree(msq);
@@ -564,22 +553,6 @@ void ipc_rcu_putref(struct kern_ipc_perm *ptr,
 	call_rcu(&ptr->rcu, func);
 }
 
-/**
- * ipcperms - check ipc permissions
- * @ns: ipc namespace
- * @ipcp: ipc permission set
- * @flag: desired permission set
- *
- * Check user, group, other permissions for access
- * to ipc resources. return 0 if allowed
- *
- * @flag will most probably be 0 or ``S_...UGO`` from <linux/stat.h>
- */
-
-/*
- * Functions to convert between the kern_ipc_perm structure and the
- * old/new ipc_perm structures
- */
 
 
 /**
@@ -622,7 +595,6 @@ void ipc64_perm_to_ipc_perm(struct ipc64_perm *in, struct ipc_perm *out)
 
 /**
  * ipc_obtain_object_idr
- * @ids: ipc identifier set
  * @id: ipc id to look for
  *
  * Look for an id in the ipc ids idr and return associated ipc object.
@@ -646,7 +618,6 @@ struct kern_ipc_perm *ipc_obtain_object_idr(int id)
 
 /**
  * ipc_lock - lock an ipc structure without rwsem held
- * @ids: ipc identifier set
  * @id: ipc id to look for
  *
  * Look for an id in the ipc ids idr and lock the associated ipc object.
@@ -682,7 +653,6 @@ err:
 
 /**
  * ipc_obtain_object_check
- * @ids: ipc identifier set
  * @id: ipc id to look for
  *
  * Similar to ipc_obtain_object_idr() but also checks
@@ -735,16 +705,6 @@ struct kern_ipc_perm *ipcctl_obtain_check(int id)
         goto err;
     }
     return ipcp;
-    /* audit_ipc_obj(ipcp);
-   if (cmd == IPC_SET)
-        audit_ipc_set_perm(extra_perm, perm->uid,
-                           perm->gid, perm->mode);
-
-    euid = current_euid();
-    if (uid_eq(euid, ipcp->cuid) || uid_eq(euid, ipcp->uid)  ||
-        ns_capable(ns->user_ns, CAP_SYS_ADMIN))
-        return ipcp; *//* successful lookup *//*
- */
     err:
     return ERR_PTR(err);
 }
@@ -752,10 +712,6 @@ struct kern_ipc_perm *ipcctl_obtain_check(int id)
 
 /**
  * ipcget - Common sys_*get() code
- * @ns: namespace
- * @ids: ipc identifier set
- * @ops: operations to be called on ipc object creation, permission checks
- *       and further checks
  * @params: the parameters needed by the previous operations.
  *
  * Common routine called by sys_tag_get()
@@ -771,67 +727,7 @@ int ipcget(struct ipc_params *params)
 
 }
 
-///**
-// * ipc_update_perm - update the permissions of an ipc object
-// * @in:  the permission given as input.
-// * @out: the permission of the ipc to set.
-// */
-//int ipc_update_perm(struct ipc64_perm *in, struct kern_ipc_perm *out)
-//{
-//	kuid_t uid = make_kuid(current_user_ns(), in->uid);
-//	kgid_t gid = make_kgid(current_user_ns(), in->gid);
-//	if (!uid_valid(uid) || !gid_valid(gid))
-//		return -EINVAL;
-//
-//	out->uid = uid;
-//	out->gid = gid;
-//	out->mode = (out->mode & ~S_IRWXUGO)
-//		| (in->mode & S_IRWXUGO);
-//
-//	return 0;
-//}
 
-/**
- * ipcctl_pre_down_nolock - retrieve an ipc and check permissions for some IPC_XXX cmd
- * @ns:  ipc namespace
- * @ids:  the table of ids where to look for the ipc
- * @id:   the id of the ipc to retrieve
- * @cmd:  the cmd to check
- * @perm: the permission to set
- * @extra_perm: one extra permission parameter used by msq
- *
- * This function does some common audit and permissions check for some IPC_XXX
- * cmd and is called from semctl_down, shmctl_down and msgctl_down.
- * It must be called without any lock held and:
- *
- *   - retrieves the ipc with the given id in the given table.
- *   - performs some audit and permission check, depending on the given cmd
- *   - returns a pointer to the ipc object or otherwise, the corresponding
- *     error.
- *
- * Call holding the both the rwsem and the rcu read lock.
- */
-/*struct kern_ipc_perm *ipcctl_pre_down_nolock(int id)
-{
-	kuid_t euid;
-	int err = -EPERM;
-	struct kern_ipc_perm *ipcp;
-
-	ipcp = ipc_obtain_object_check( id);
-	if (IS_ERR(ipcp)) {
-		err = PTR_ERR(ipcp);
-		goto err;
-	}
-
-
-	
-	*//*euid = current_euid();
-	if (uid_eq(euid, ipcp->cuid) || uid_eq(euid, ipcp->uid)  ||
-	    ns_capable(ns->user_ns, CAP_SYS_ADMIN))*//*
-	return ipcp; *//* successful lookup *//*
-err:
-	return ERR_PTR(err);
-}*/
 
 #ifdef CONFIG_ARCH_WANT_IPC_PARSE_VERSION
 
@@ -858,7 +754,6 @@ int ipc_parse_version(int *cmd)
 
 #ifdef CONFIG_PROC_FS
 struct ipc_proc_iter {
-//	struct ipc_ids *ids;
 	struct ipc_proc_iface *iface;
 };
 
@@ -886,7 +781,6 @@ static struct kern_ipc_perm *sysvipc_find_ipc( loff_t pos,
 		ipc = idr_find(&(ids->ipcs_idr), pos);
 		if (ipc != NULL) {
 			rcu_read_lock();
-//			ipc_lock_object(ipc);
 			break;
 		}
 	}
@@ -897,13 +791,6 @@ out:
 
 static void *sysvipc_proc_next(struct seq_file *s, void *it, loff_t *pos)
 {
-//	struct ipc_proc_iter *iter = s->private;
-//	struct ipc_proc_iface *iface = iter->iface;
-//	struct kern_ipc_perm *ipc = it;
-
-	/* If we had an ipc id locked before, unlock it */
-//	if (ipc && ipc != SEQ_START_TOKEN)
-//		ipc_unlock(ipc);
 
 	return sysvipc_find_ipc( *pos, pos);
 }
@@ -914,11 +801,6 @@ static void *sysvipc_proc_next(struct seq_file *s, void *it, loff_t *pos)
  */
 static void *sysvipc_proc_start(struct seq_file *s, loff_t *pos)
 {
-//	struct ipc_proc_iter *iter = s->private;
-//	struct ipc_proc_iface *iface = iter->iface;
-	//struct ipc_ids *ids;
-
-//	ids = iter->ids;
 
 	/*
 	 * Take the lock - this will be released by the corresponding
@@ -940,17 +822,6 @@ static void *sysvipc_proc_start(struct seq_file *s, loff_t *pos)
 
 static void sysvipc_proc_stop(struct seq_file *s, void *it)
 {
-//	struct kern_ipc_perm *ipc = it;
-//	struct ipc_proc_iter *iter = s->private;
-//	struct ipc_proc_iface *iface = iter->iface;
-//	struct ipc_ids *ids;
-
-	/* If we had a locked structure, release it */
-//	if (ipc && ipc != SEQ_START_TOKEN)
-//		ipc_unlock(ipc);
-
-//	ids = iter->ids;
-	/* Release the lock we took in start() */
 	up_read(&(ids->rwsem));
 }
 
@@ -983,17 +854,11 @@ static int sysvipc_proc_open(struct inode *inode, struct file *file)
 		return -ENOMEM;
 
 	iter->iface = PDE_DATA(inode);
-//	iter->ids    = ids;
-
 	return 0;
 }
 
 static int sysvipc_proc_release(struct inode *inode, struct file *file)
 {
-//	struct seq_file *seq = file->private_data;
-//	struct ipc_proc_iter *iter = seq->private;
-	//put_ipc_ns(iter->ns);
-	//iter->ids;
 	return seq_release_private(inode, file);
 }
 
