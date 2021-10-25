@@ -96,6 +96,7 @@ void remove_all(){
     idr_for_each(&(ids->ipcs_idr), &remove_object, NULL);
     rhashtable_destroy(&(ids->key_ht));
 
+    idr_destroy(&(ids->ipcs_idr));
 }
 
 
@@ -128,21 +129,16 @@ struct _tag_elem* check_and_get_tag_if_exists(int id){
     return container_of(ipcp, struct _tag_elem, q_perm);
 }
 
-char* load_msg(char* buffer, int size){
+int load_msg(char* buffer, int size, char* addr){
     int ret;
-    char* addr;
-
-    addr = (void *) get_zeroed_page(GFP_KERNEL);
-
-    if (addr == NULL) return NULL;
 
     ret = copy_from_user((char *) addr, (char *) buffer, size);//returns the number of bytes NOT copied
 
-    return addr;
+    return ret;
 }
 
 /* Implementazione della sys-call send
- *
+ * Prende in input una struttura di parametri e ritorna l'id del tag
 */
 int tag_get(struct ipc_params params) {
     return ipcget(&params);
@@ -150,7 +146,8 @@ int tag_get(struct ipc_params params) {
 
 
 /* Implementazione della sys-call send
- *
+ *  return 0 se il messaggio è stato scartato
+ * ritorna il numero di byte copiati
 */
 int send_msg(int tag, int level, char* buffer, size_t size){
 
@@ -162,10 +159,13 @@ int send_msg(int tag, int level, char* buffer, size_t size){
     unsigned long ret;
     struct _tag_level_group *new_group;
 
-    addr = load_msg(buffer, size);
+    addr = (void *) get_zeroed_page(GFP_KERNEL);
 
+    if (addr == NULL) return -1;
+
+    ret = load_msg(buffer, size, addr);
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    //GET TAG FROM IPC STRUCT
+    //Recupero msq tramite le strutture ipc
     rcu_read_lock();
 
     msq = check_and_get_tag_if_exists(tag);
@@ -178,8 +178,8 @@ int send_msg(int tag, int level, char* buffer, size_t size){
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
     ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
-    //INIZIO LAVORO PER SVEGLIARE I THREAD
-    //PRENDO IL LOCK DEL LIVELLO PER CAMBIARE LA VISTA DEL PUNTATORE A GROUP
+    //SI INIZIA LAVORO PER SVEGLIARE I THREAD
+    //SI PRENDE IL LOCK DEL LIVELLO PER CAMBIARE LA VISTA DEL PUNTATORE A GROUP
 
     new_group = kmalloc(sizeof(struct _tag_level_group), GFP_KERNEL);
     if (new_group == NULL)
@@ -188,15 +188,18 @@ int send_msg(int tag, int level, char* buffer, size_t size){
         goto out_unlock;
     }
     write_lock(&(msq->level[level].level_lock));
-    //controllo se il tag è stato eliminato
+    /* refcount_t mantiene all'interno della sua struttura un atomic_t */
     count = atomic_read(&msq->q_perm.refcount.refs);
-    if(count== -1 || count==1){
-        //NON CI SONO THREAD IN ATTESA
+    if(count == -1 || count==1){
+        /* -1 se il tag è stato rimosso
+         * 1 se non ci sono thread in attesa (corrisponde all'inizializzazione)
+         */
         write_unlock(&msq->level[level].level_lock);
         err = 0;
         goto out_unlock;
     }
 
+    /* Si utilizza la struttura _tag_level_group per non bloccare i prossimi sender */
     copy = msq->level[level].group;
     msq->level[level].group = new_group;
 
@@ -217,11 +220,9 @@ int send_msg(int tag, int level, char* buffer, size_t size){
     copy->awake = 0;
     wake_up(&(copy->my_queue));
 
+    /* ritorno il numero di byte copii */
     return size - ret;
 
-
-//    bad_size:
-//    return -1;
 
     out_unlock:
     rcu_read_unlock();
@@ -230,16 +231,7 @@ int send_msg(int tag, int level, char* buffer, size_t size){
     return err;
 }
 
-//static void msg_rcu_free(struct rcu_head *head)
-//{
-//    struct kern_ipc_perm *p = container_of(head, struct kern_ipc_perm, rcu);
-//    msg_queue *msq = container_of(p, msg_queue, q_perm);
-//
-////    security_msg_queue_free(msq);
-//
-//    kfree(msq);
-//
-//}
+
 
 /*
  * freeque() wakes up waiters on the sender and receiver waiting queue,
@@ -252,29 +244,19 @@ int send_msg(int tag, int level, char* buffer, size_t size){
 static void freeque( struct kern_ipc_perm *ipcp, msg_queue *msq)
 {
 
-//    msg_queue *msq = container_of(ipcp,  msg_queue, q_perm);
 
-    /* DEFINE_WAKE_Q(wake_q);
-
-     expunge_all(msq, -EIDRM, &wake_q);
-     ss_wakeup(msq, &wake_q, true);*/
     ipc_rmid( &(msq->q_perm));
-    //  ipc_unlock_object(&msq->q_perm);
-//    wake_up_q(&wake_q);
     write_unlock(&(msq->tag_lock));
     rcu_read_unlock();
 
-    /* list_for_each_entry_safe(msg, t, &msq->q_messages, m_list) {
-         atomic_dec(&ns->msg_hdrs);
-         free_msg(msg);
-     }
-     atomic_sub(msq->q_cbytes, &ns->msg_bytes);*/
-
-    //reclamo memoria quando i read lock che intaccano questa struttura sono finiti
     ipc_rcu_putref(&(msq->q_perm), msg_rcu_free);
 
 
 }
+
+/*Politica di non eliminare il tag se ci sono readers
+ * ritorna 1 se non ci sono stati errori
+*/
 int remove_tag(int tag){
 
     //incremento contatore atomic per tag di accessi
@@ -293,28 +275,24 @@ int remove_tag(int tag){
         return err;
     }
 
-    /* err = security_msg_queue_msgctl(msq, cmd);
-     if (err)
-         goto out_unlock1;*/
 
-//    ipc_lock_object(&msq->q_perm);
-
-    //se non ci sonor reader chiudo il gate d entrata nella receive
-    //i receiver che arrivano falliscono perche sto eliminando il nodo
+    /*se non ci sono reader chiudo il gate d entrata nella receive
+     *i receiver che arrivano falliscono perche sto eliminando il nodo
+    */
     if (!write_trylock(&(msq->tag_lock))) {
         //lock occupato dai waiters
         rcu_read_unlock();
         up_write(&(ids->rwsem));
         return -1;
     }
-    //se c è solo un reader posso eliminare
+    /* se c è solo un reader posso eliminare il tag
+     * imposto il refcount al valore di 1
+    */
     if( atomic_cmpxchg(&(msq->q_perm.refcount.refs), 1, -1) == 1){
         /* freeque unlocks the ipc object and rcu */
         freeque(ipcp, msq);
         up_write(&(ids->rwsem));
     }else{
-        // if(refcount_read(&msq->q_perm.refcount) != 1){
-        //ipc_unlock_object(&msq->q_perm);
         write_unlock(&(msq->tag_lock));
         rcu_read_unlock();
         up_write(&(ids->rwsem));
@@ -323,6 +301,7 @@ int remove_tag(int tag){
     return 1;
 }
 
+/* Non atomica */
 int awake_all(int tag){
 //    struct global_data gd;
 //    struct task_struct *kthread;
@@ -385,8 +364,6 @@ int tag_receive(int tag, int level, char* buffer, size_t size){
 
 
     if (IS_ERR(msq)) {
-        //TODO USARE REFERENCE COUNT
-        //atomic_dec((atomic_t*)&msq->num_thread_per_tag);
         err = PTR_ERR(msq);
         goto out_unlock;
     }
@@ -397,8 +374,7 @@ int tag_receive(int tag, int level, char* buffer, size_t size){
 
     //serve read lock perchè se dealloco la struttura p, non posso piu accedere alla variabile lock
     //sezione critica condivisa con remover con contatore atomico per tag di accessi
-//    spin_lock(&msq->q_perm.);
-    //TODO attenzione ipc_lock_object(&msq->q_perm);
+
     while(!read_trylock(&(msq->tag_lock))) {
         //lock occupato dall eliminatore
         //controllo se il tag è stato eliminato, in caso positivo termino
@@ -409,34 +385,13 @@ int tag_receive(int tag, int level, char* buffer, size_t size){
     }
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
-    /* raced with RMID? */
-//        if (!ipc_valid_object(&msq->q_perm)) {
-//            err = -EIDRM;
-//            //TODO attenzione ipc_unlock_object(&msq->q_perm);
-//            rcu_read_unlock();
-//
-//            return err;
-//        }
-
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
     //INCREMENTO REF se va tutto bene
     if (!ipc_rcu_getref(&(msq->q_perm))) {
         err = -EIDRM;
-        //TODO attenzione ipc_unlock_object(&msq->q_perm);
         read_unlock(&(msq->tag_lock));
         goto out_unlock;
     }
-
-    // check se contator è -1 serve per fare la remove atomica che
-    /*  if (msq->num_thread_per_tag == -1){
-          ipc_unlock_object(msq->q_perm);
-          // rcu_read_unlock();
-          return -1;
-      }*/
-    //incremento contatore atomic per tag di accessi
-//    msq->num_thread_per_tag++;
-    //TODO attenzione ipc_unlock_object(&msq->q_perm);
 
     /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -456,9 +411,7 @@ int tag_receive(int tag, int level, char* buffer, size_t size){
 
     //SBLOCCO LE AREE
 
-    //atomic_inc((atomic_t*)&p->level[level].num_thread);//a new sleeper
     wait_event_interruptible(copy->my_queue, copy->awake == 0);
-    //spin_unlock(&p->level[level].level_lock);
     if(copy->awake == 1){
 
         read_unlock(&(msq->tag_lock));
@@ -467,13 +420,6 @@ int tag_receive(int tag, int level, char* buffer, size_t size){
     }
 
     //prima leggo poi decremento
-//        atomic_dec((atomic_t*)&p->level[level].num_thread);//finally awaken
-    printk("%s: BUONGIORNOOOOOOOOO\n", MODNAME);
-
-    //posso incrementare il reference anche qui perchè i tag non intaccano la memoria copiata
-    //TODO da ragionare sulla posizione di questi rilasci
-    //decremento il refcount
-
 
     read_unlock(&(msq->tag_lock));
     rcu_read_unlock();
@@ -485,46 +431,20 @@ int tag_receive(int tag, int level, char* buffer, size_t size){
     addr = (void*)get_zeroed_page(GFP_KERNEL);
     if (addr == NULL) return -1;
 
-//    mutex_lock(&log_get_mutex);
     memcpy((char*)addr,(char*)copy->kernel_buff,size);
 
 
     atomic_dec((atomic_t*)&copy->num_thread);
-//    mutex_unlock(&log_get_mutex);
-
-
-
-
-//    spin_lock(&msq->tag_lock);
-//    p->num_thread_per_tag--;
-//    spin_unlock(&msq->tag_lock);
-    //rcu_read_unlock();
 
     //returns the number of bytes NOT copied
     ret = copy_to_user((char*)buffer,(char*)addr,size);
     free_pages((unsigned long)addr,0);
 
 
-//        the_task = kzalloc(sizeof(packed_work),GFP_ATOMIC);//non blocking memory allocation
-
-    /* if (the_task == NULL) {
-         module_put(THIS_MODULE);
-         return -1;
-     }
- */
-//        the_task->code = request_code;
-
     //ULtimo chiude la porta (rimuove la memoria).
     if(atomic_dec_and_test((atomic_t*)&copy->num_thread) ){
         kvfree(copy);
     }//a new sleeper
-//    spin_lock(&copy->lock_presence_counter);
-    /* if (copy->num_thread==0){
-         the_task->buffer = copy;
-         __INIT_WORK(&(the_task->the_work),(void*)free_mem,&(the_task->the_work));
-         schedule_work(&the_task->the_work);
-     }*/
-    //spin_unlock(&copy->lock_presence_counter);
 
     return size - ret;
 

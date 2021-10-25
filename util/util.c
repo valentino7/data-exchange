@@ -56,7 +56,6 @@ static const struct rhashtable_params ipc_kht_params = {
 };
 /**
  * ipc_init_ids	- initialise ipc identifiers
- * @ids: ipc identifier set
  *
  * Set up the sequence range to use for the ipc identifier range (limited
  * below IPCMNI) then initialise the keys hashtable and ids idr.
@@ -74,7 +73,6 @@ int ipc_init_ids(void)
 	if (err)
 		return err;
 	idr_init(&(ids->ipcs_idr));
-//	ids->tables_initialized = true;
 	ids->max_idx = -1;
     ids->last_idx = -1;
 #ifdef CONFIG_CHECKPOINT_RESTORE
@@ -119,7 +117,6 @@ void ipc_init_proc_interface(const char *path, const char *header, int (*show)(s
 
 /**
  * ipc_findkey	- find a key in an ipc identifier set
- * @ids: ipc identifier set
  * @key: key to find
  *
  * Returns the locked pointer to the ipc structure if found or NULL
@@ -132,6 +129,7 @@ static struct kern_ipc_perm *ipc_findkey( key_t key)
 
     struct kern_ipc_perm *ipcp;
 
+    //rcu lock all interno
     ipcp = rhashtable_lookup_fast(&(ids->key_ht), &(key),
                                   ipc_kht_params);
     if (!ipcp)
@@ -223,7 +221,6 @@ static inline int ipc_idr_alloc(struct kern_ipc_perm *new)
 
 /**
  * ipc_addid - add an ipc identifier
- * @ids: ipc identifier set
  * @new: new ipc permission set
  * @limit: limit for the number of used ids
  *
@@ -252,7 +249,6 @@ int ipc_addid( struct kern_ipc_perm *new, int limit)
 
     idr_preload(GFP_KERNEL);
 
-	//refcount_set(&new->refcount, 1);
     spin_lock_init(&(new->lock));
     rcu_read_lock();
     spin_lock(&(new->lock));
@@ -269,7 +265,11 @@ int ipc_addid( struct kern_ipc_perm *new, int limit)
     idr_preload_end();
 
     if (idx >= 0 && new->key != IPC_PRIVATE) {
-
+        /*params:
+         * hashtable
+         * obj
+         * hashtable parameters
+         */
         err = rhashtable_insert_fast(&(ids->key_ht), &(new->khtnode),
                                      ipc_kht_params);
         if (err < 0) {
@@ -340,7 +340,6 @@ int my_newque(struct ipc_params * params){
     int retval;
     msg_queue *msq;
 
-    //msq = kvmalloc(sizeof(*msq), GFP_KERNEL);
     msq= alloc_and_fill_tag_service();
     if (unlikely(!msq))
         return -ENOMEM;
@@ -352,11 +351,9 @@ int my_newque(struct ipc_params * params){
 
     if (retval < 0) {
         ipc_rcu_putref(&(msq->q_perm), msg_rcu_free);
-//        call_rcu(&(msq->q_perm.rcu), msg_rcu_free);
         return retval;
     }
     ipc_unlock_object(&(msq->q_perm));
-    //ipc_unlock_object(&msq->q_perm);
     rcu_read_unlock();
     return msq->q_perm.id;
 
@@ -364,12 +361,9 @@ int my_newque(struct ipc_params * params){
 
 /**
  * ipcget_new -	create a new ipc object
- * @ns: ipc namespace
- * @ids: ipc identifier set
- * @ops: the actual creation routine to call
  * @params: its parameters
  *
- * This routine is called by sys_msgget, sys_semget() and sys_shmget()
+ * This routine is called by sys_tag_get
  * when the key is IPC_PRIVATE.
  */
 static int ipcget_new( struct ipc_params *params)
@@ -387,31 +381,12 @@ static int ipcget_new( struct ipc_params *params)
 	return err;
 }
 
-/**
- * ipc_check_perms - check security and permissions for an ipc object
- * @ns: ipc namespace
- * @ipcp: ipc permission set
- * @ops: the actual security routine to call
- * @params: its parameters
- *
- * This routine is called by sys_msgget(), sys_semget() and sys_shmget()
- * when the key is not IPC_PRIVATE and that key already exists in the
- * ds IDR.
- *
- * On success, the ipc id is returned.
- *
- * It is called with ipc_ids.rwsem and ipcp->lock held.
- */
-
 
 /**
  * ipcget_public - get an ipc object or create a new one
- * @ns: ipc namespace
- * @ids: ipc identifier set
- * @ops: the actual creation routine to call
  * @params: its parameters
  *
- * This routine is called by sys_msgget, sys_semget() and sys_shmget()
+ * This routine is called by sys_tag_get
  * when the key is not IPC_PRIVATE.
  * It adds a new entry if the key is not found and does some permission
  * / security checkings if the key is found.
@@ -431,6 +406,7 @@ static int ipcget_public(struct ipc_params * params)
 	 * a new entry + read locks are not "upgradable"
 	 */
 	err=-1;
+    //semaforo condiviso, non accedo finche chi rimuove non ha finito
 	down_write(&(ids->rwsem));
 	ipcp = ipc_findkey(params->key);
 
@@ -464,12 +440,7 @@ static int ipcget_public(struct ipc_params * params)
             else if (flg & IPC_CREAT && flg & IPC_EXCL)
                 err = -EEXIST;
             else {
-                /*err = 0;
-                if (ops->more_checks)
-                    err = ops->more_checks(ipcp, params);*/
-
                 err=ipcp->id;
-
             }
 
             ipc_unlock(ipcp);
@@ -787,7 +758,7 @@ struct kern_ipc_perm *ipcctl_obtain_check(int id)
  *       and further checks
  * @params: the parameters needed by the previous operations.
  *
- * Common routine called by sys_msgget(), sys_semget() and sys_shmget().
+ * Common routine called by sys_tag_get()
  */
 int ipcget(struct ipc_params *params)
 {

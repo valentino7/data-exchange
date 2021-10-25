@@ -44,36 +44,8 @@
 
 #define SEQ_MULTIPLIER	(IPCMNI)
 
-int sem_init(void);
-int msg_init(void);
-void shm_init(void);
 
 
-#ifdef CONFIG_POSIX_MQUEUE
-extern void mq_clear_sbinfo(struct ipc_namespace *ns);
-extern void mq_put_mnt(struct ipc_namespace *ns);
-#else
-static inline void mq_clear_sbinfo(struct ipc_namespace *ns) { }
-static inline void mq_put_mnt(struct ipc_namespace *ns) { }
-#endif
-
-#ifdef CONFIG_SYSVIPC
-void sem_init_ns(struct ipc_namespace *ns);
-void msg_init_ns(struct ipc_namespace *ns);
-void shm_init_ns(struct ipc_namespace *ns);
-
-void sem_exit_ns(struct ipc_namespace *ns);
-void msg_exit_ns(struct ipc_namespace *ns);
-void shm_exit_ns(struct ipc_namespace *ns);
-#else
-static inline void sem_init_ns(struct ipc_namespace *ns) {  }
-static inline void msg_init_ns(struct ipc_namespace *ns) {  }
-static inline void shm_init_ns(struct ipc_namespace *ns) {  }
-
-static inline void sem_exit_ns(struct ipc_namespace *ns) { }
-static inline void msg_exit_ns(struct ipc_namespace *ns) { }
-static inline void shm_exit_ns(struct ipc_namespace *ns) { }
-#endif
 
 /*
  * Structure that holds the parameters needed by the ipc operations
@@ -101,7 +73,6 @@ struct _tag_level{
     unsigned long num_thread __attribute__((aligned(8)));
 
     struct _tag_level_group* group;
-    //spinlock_t queue_lock;
     rwlock_t level_lock;
 
 };
@@ -110,22 +81,8 @@ struct _tag_level{
 typedef struct _tag_elem{
     struct kern_ipc_perm q_perm;
     struct _tag_level* level;
-//    int num_thread_per_tag __attribute__((aligned(8)));
     rwlock_t tag_lock;
     pid_t pid_creator;
-//    int tag;
-//    int key;
-
-    //lock per rimuovere in manierea sicura
-//    spinlock_t tag_lock;
-    //contatore accessi
-
-
-//    struct list_head node;
-//    struct rcu_head rcu;
-//    struct _tag_elem * next;
-//    struct _tag_elem * prev;
-    //tid creator
 } msg_queue;
 
 extern struct ipc_ids *ids;

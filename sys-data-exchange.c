@@ -110,16 +110,6 @@ struct ipc_ids *ids;
 
 
 
-
-void free_mem(unsigned long data){
-
-    printk("free mem da implementare");
-//    kfree((void*)container_of(data,packed_work,the_work));
-//    module_put(THIS_MODULE);
-
-}
-
-
 #ifdef CONFIG_PROC_FS
 int sysvipc_msg_proc_show(struct seq_file *s, void *it)
 {
@@ -184,25 +174,13 @@ static unsigned long sys_tag_get = (unsigned long) __x64_sys_tag_get;
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
 __SYSCALL_DEFINEx(4, _tag_send, int, tag, int, level, char*, buffer, size_t, size){
 #else
-    /*scrivo area condivisa
-     * lock on wait queue e leggo atomic counter svegliando poi i thread dormienti e unlock
-     * while var local atomic counter == version reader*/
 asmlinkage int sys_tag_send(int tag, int level, char* buffer, size_t size){
 #endif
     int result;
     try_module_get(THIS_MODULE);
 
-    //void* addr;
-
-
-//    p->level[level].awake=0;
-
-    //read lock sulla lettura
-    //TODO CHECK SULLA PERMISSION
-
     //trade off tra sicurezza e velocità
     if (size >= (MAX_MSG_SIZE - 1) || (long) size < 0 || tag < 0 || level > 31 || level < 0)
-//        goto bad_size;//leave 1 byte for string terminator
         return -1;
     result = send_msg(tag, level, buffer, size);
 
@@ -225,20 +203,8 @@ asmlinkage int sys_tag_receive(int tag, int level, char* buffer, size_t size){
 
     int result;
     try_module_get(THIS_MODULE);
-    //packed_work *the_task;
-
-
-    //trade off tra sicurezza e velocità
     if (size >= (MAX_MSG_SIZE - 1) || (long) size < 0 || tag < 0 || level > 31 || level < 0)
         return -1;//leave 1 byte for string terminator
-
-
-    //mi attesto su un nodo
-    //stampo tutti i nodi
-//    print_list_tag(tag);
-
-
-
     result = tag_receive(tag, level, buffer, size);
 
     module_put(THIS_MODULE);
@@ -259,19 +225,11 @@ __SYSCALL_DEFINEx(2, _tag_ctl, int, tag, int, command){
 asmlinkage int sys_tag_ctl(int tag, int command){
 #endif
     int result;
-    //TODO PERMISSION CHECK
-    //struct _tag_elem* p;
-    //rcu_read_lock();
-    //rcu_read_unlock();
-//    int err;
 
-//TODO decommentare
     try_module_get(THIS_MODULE);
     result = tag_ctl(command, tag);
     module_put(THIS_MODULE);
     return result;
-//    remove_all();
-//    return 0;
 }
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4,17,0)
@@ -320,9 +278,6 @@ int init_module(void) {
 
     ipc_init_proc_interface("sysvipc/dataExchange","       TAG-key TAG-creator TAG-level Waiting-threads \n", sysvipc_msg_proc_show);
 
-//    ipc_init_proc_interface("sysvipc/dataExchange","       TAG-key      msqid\n", sysvipc_msg_proc_show);
-    //spin_lock_init(&list_tag_lock);
-
     //Doppio puntatore che punta all'array che mantiene dentro le system call libere
     syscall_table_finder(&hacked_ni_syscall, &hacked_syscall_tbl);
 
@@ -361,8 +316,6 @@ void cleanup_module(void) {
 #ifdef SYS_CALL_INSTALL
 	cr0 = read_cr0();
         unprotect_memory();
-        //hacked_syscall_tbl[FIRST_NI_SYSCALL] = (unsigned long*)hacked_ni_syscall;
-
  	for(i=0;i<HACKED_ENTRIES;i++){
                 ((unsigned long *)hacked_syscall_tbl)[free_entries[i]] = (unsigned long)hacked_ni_syscall;
         }

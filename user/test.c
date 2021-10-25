@@ -669,11 +669,11 @@ void test_tag_remove(){
 
 int main(int argc, char** argv){
 
-    //test_tag_get();
+//    test_tag_get();
 
 //    test_tag_send_receive();
 
-    //test_sr_multiple_receivers_single_taglevel();
+    test_sr_multiple_receivers_single_taglevel();
 
 //    test_sr_multithread_rec_send_alltag_alllevel();
 
@@ -684,13 +684,13 @@ int main(int argc, char** argv){
     //test_tag_remove_awake();
 
 //    test_tag_remove_awake_multithread();
-    int tag = sys_tag_get(2, IPC_CREAT, RESTRICT);
-    printf("tag: %d \n", tag);
-
-
-
-    int result = sys_tag_ctl(tag, REMOVE);
-    printf("risultato aspettato dalla rimozione di tag_1 è -1:%d  \n", result);
+//    int tag = sys_tag_get(2, IPC_CREAT, RESTRICT);
+//    printf("tag: %d \n", tag);
+//
+//
+//
+//    int result = sys_tag_ctl(tag, REMOVE);
+//    printf("risultato aspettato dalla rimozione di tag_1 è -1:%d  \n", result);
 
 
     return 0;
